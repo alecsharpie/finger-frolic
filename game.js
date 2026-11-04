@@ -2,9 +2,10 @@
 //
 // The field is one lane per player. Monsters march down the lanes from y = 0 (the woods) to y = 1 (the wall).
 // Each monster carries a row of arrows; the lane's player swipes them in order on their phone. A right swipe
-// knocks off the next arrow, a wrong one leaves you dizzy for a moment and drops your combo. A monster that
-// reaches the wall costs the team a heart. Every 5th wave a boss spans every lane, and each player has to clear
-// their own row of its arrows, so it only falls when everyone does their part.
+// knocks off the next arrow (and knocks the monster back a little), a wrong one leaves you dizzy for a moment and
+// drops your combo. A monster that reaches the wall costs the team a heart. When your lane is clear, your swipes
+// help a neighbour. Golden gift boxes drop power-ups, and good teamwork fills a shared FRENZY meter. Every 5th wave
+// a boss spans every lane, and each player has to clear their own row of its arrows.
 
 export const DIRS = ['u', 'r', 'd', 'l'];
 export const OPPOSITE = { u: 'd', d: 'u', l: 'r', r: 'l' };
@@ -15,15 +16,29 @@ export const STUN = 0.5;            // seconds dizzy after a wrong swipe
 export const BREAK = 4;             // seconds between waves
 export const SUPER_PER_HIT = 0.07;  // a super needs ~15 good swipes
 export const BOSS_EVERY = 5;
+export const KNOCK = 0.03;          // how far a good hit shoves a monster back up its lane
+export const ASSIST_FROM = 0.25;    // a neighbour's monster must be this far down before you can help with it
+export const FREEZE = 5, FRENZY = 8; // seconds
+export const FRENZY_HITS = 12;      // good swipes per player to fill the team meter
+export const POWERS = ['freeze', 'heal', 'storm'];
 
 // speed: lane lengths per second at wave 1 (1/9 = nine seconds from the woods to the wall)
 export const KINDS = {
-  grunt:     { arrows: [1, 1], speed: 1 / 9,  points: 50,  from: 1 },
-  brute:     { arrows: [2, 3], speed: 1 / 13, points: 120, from: 2 },
-  runner:    { arrows: [1, 1], speed: 1 / 5,  points: 80,  from: 3 },
-  spinner:   { arrows: [1, 2], speed: 1 / 10, points: 100, from: 4 }, // its next arrow turns until you hit it
-  trickster: { arrows: [2, 2], speed: 1 / 10, points: 100, from: 6 }, // red arrows: swipe the other way
-  boss:      { arrows: [6, 6], speed: 1 / 18, points: 600, from: BOSS_EVERY },
+  grunt:     { arrows: [1, 1], speed: 1 / 9,  points: 50,  from: 1, weight: 3 },
+  brute:     { arrows: [2, 3], speed: 1 / 13, points: 120, from: 2, weight: 1, heavy: true },
+  runner:    { arrows: [1, 1], speed: 1 / 5,  points: 80,  from: 3, weight: 1 },
+  spinner:   { arrows: [1, 2], speed: 1 / 10, points: 100, from: 4, weight: 1 }, // its next arrow turns until hit
+  trickster: { arrows: [2, 2], speed: 1 / 10, points: 100, from: 6, weight: 1 }, // red arrows: swipe the other way
+  gift:      { arrows: [2, 2], speed: 1 / 6,  points: 150, from: 2, weight: 0 }, // placed by planWave; harmless
+  boss:      { arrows: [6, 6], speed: 1 / 18, points: 600, from: BOSS_EVERY, weight: 0 },
+};
+// What the TV says when a kind first shows up.
+export const INTRO = {
+  brute: '🟣 Brutes: tough, 2–3 arrows',
+  gift: '🎁 Gift boxes: pop them for a power-up!',
+  runner: '🟠 Runners: fast!',
+  spinner: '🌀 Spinners: the arrow turns until you hit it',
+  trickster: '🟥 Tricksters: red arrows mean swipe the OTHER way',
 };
 export const SPIN_EVERY = 0.75;
 export const SPACING = 0.17;      // lane lengths between monsters in one lane, so their arrows never overlap
@@ -36,12 +51,13 @@ const pick = (r, a) => a[Math.floor(r() * a.length)];
 const between = (r, [a, b]) => a + Math.floor(r() * (b - a + 1));
 
 export function newPlayer(name = '') {
-  return { name, score: 0, combo: 0, best: 0, kills: 0, super: 0, stun: 0, ev: 0, last: '' };
+  return { name, score: 0, combo: 0, best: 0, kills: 0, super: 0, stun: 0, ev: 0, last: '', misses: 0, hits: 0, assists: 0, gifts: 0 };
 }
 
 export function newGame(seed) {
   return { phase: 'lobby', t: 0, wave: 0, hearts: START_HEARTS, lanes: [], players: {}, enemies: [], queue: [],
-    next: 1, timer: 0, r: rng(seed), log: [], lost: 0 };
+    next: 1, timer: 0, r: rng(seed), log: [], lost: 0, waveLost: 0,
+    frenzy: 0, frenzyT: 0, freezeT: 0, tev: 0, tlast: '' };
 }
 
 // Make sure a seat has a player record (they keep their score if they drop out and come back).
@@ -69,18 +85,23 @@ export function waveSize(wave, lanes) {
 
 // Build the spawn list for a wave: [{at, kind, lane}] sorted by time.
 export function planWave(wave, lanes, r) {
-  const kinds = Object.keys(KINDS).filter(k => k !== 'boss' && KINDS[k].from <= wave);
+  const kinds = Object.keys(KINDS).filter(k => KINDS[k].weight && KINDS[k].from <= wave);
   const n = waveSize(wave, lanes);
   const gap = Math.max(0.55, 2.4 - wave * 0.15) / Math.sqrt(lanes); // seconds between spawns across the field
   const out = [];
   let at = 1.2;
   for (let i = 0; i < n; i++) {
     // newer kinds show up less often, so the wave is mostly what you already know
-    const w = kinds.map(k => (k === 'grunt' ? 3 : 1) + (wave - KINDS[k].from > 1 ? 1 : 0));
+    const w = kinds.map(k => KINDS[k].weight + (wave - KINDS[k].from > 1 ? 1 : 0));
     let x = r() * w.reduce((a, b) => a + b, 0), kind = kinds[0];
     for (let j = 0; j < kinds.length; j++) { x -= w[j]; if (x < 0) { kind = kinds[j]; break; } }
     out.push({ at, kind, lane: Math.floor(r() * lanes) });
     at += gap * (0.6 + r() * 0.8);
+  }
+  // a gift or two somewhere in the middle of the wave
+  if (wave >= KINDS.gift.from) {
+    const gifts = 1 + (lanes >= 4 ? 1 : 0) + (wave >= 8 ? 1 : 0);
+    for (let g = 0; g < gifts && out.length > 2; g++) out[1 + Math.floor(r() * (out.length - 2))].kind = 'gift';
   }
   // the boss closes its wave and comes alone (step() holds it until the field is clear)
   if (isBossWave(wave)) out.push({ at: at + 2, kind: 'boss', lane: -1 });
@@ -95,13 +116,14 @@ export function startWave(G, seats) {
   G.enemies = [];
   G.phase = 'wave';
   G.timer = 0;
-  say(G, 'wave', G.wave);
+  G.waveLost = 0;
+  say(G, 'wave', G.wave, Object.keys(INTRO).filter(k => KINDS[k].from === G.wave));
 }
 
 function makeEnemy(G, { kind, lane }) {
   const K = KINDS[kind], L = G.lanes.length;
   const row = n => Array.from({ length: n }, () => pick(G.r, DIRS));
-  const e = { id: G.next++, kind, lane, y: -0.04, speed: K.speed * speedScale(G.wave), hit: 0, spin: 0, wob: G.r() * 6.28 };
+  const e = { id: G.next++, kind, lane, y: -0.04, speed: K.speed * speedScale(G.wave), hit: 0, spin: 0, wob: G.r() * 6.28, hurt: 0 };
   if (kind === 'boss') {
     const n = between(G.r, K.arrows) + Math.floor(G.wave / BOSS_EVERY) - 1;
     e.tracks = Array.from({ length: L }, () => row(n));
@@ -110,6 +132,7 @@ function makeEnemy(G, { kind, lane }) {
     e.arrows = row(between(G.r, K.arrows));
     if (kind === 'trickster') e.flip = e.arrows.map(() => G.r() < 0.6);
   }
+  if (kind === 'gift') say(G, 'gift', lane, e.id);
   return e;
 }
 
@@ -124,15 +147,30 @@ export function need(e, lane) {
   return e.flip && e.flip[e.hit] ? OPPOSITE[a] : a;
 }
 
-// The enemy a lane's swipes hit: the one nearest the wall that still needs something from this lane.
+// The enemy in a lane that the lane's swipes hit: the one nearest the wall that still needs something from it.
 export function targetOf(G, lane) {
   let best = null;
   for (const e of G.enemies) if (e.y > 0 && need(e, lane) && (!best || e.y > best.y)) best = e;
   return best;
 }
 
+// Where a player's swipes go: their own lane first; if it is clear, the more urgent of the neighbours' fronts.
+// Returns {e, lane} (lane: whose arrows on e are being swiped) or null.
+export function aim(G, lane) {
+  const own = targetOf(G, lane);
+  if (own) return { e: own, lane };
+  let best = null;
+  for (const n of [lane - 1, lane + 1]) {
+    if (n < 0 || n >= G.lanes.length) continue;
+    const e = targetOf(G, n);
+    if (e && e.y >= ASSIST_FROM && (!best || e.y > best.e.y)) best = { e, lane: n };
+  }
+  return best;
+}
+
 const bump = (p, k) => { p.ev++; p.last = k; };
-const mult = p => Math.min(3, 1 + Math.floor(p.combo / 10) * 0.5);
+const team = (G, k) => { G.tev++; G.tlast = k; };
+const mult = (G, p) => Math.min(3, 1 + Math.floor(p.combo / 10) * 0.5) * (G.frenzyT > 0 ? 2 : 1);
 function say(G, k, ...a) { G.log.push([k, ...a]); }
 
 // A swipe from a phone: 'u' 'd' 'l' 'r', or 'tap' to fire a full super.
@@ -142,35 +180,70 @@ export function swipe(G, seat, dir) {
   if (lane < 0 || !p || p.stun > 0) return null;
   if (dir === 'tap') return p.super >= 1 ? fireSuper(G, seat, lane, p) : null;
   if (!DIRS.includes(dir)) return null;
-  const e = targetOf(G, lane);
-  if (!e) return null;
-  if (dir !== need(e, lane)) {
-    p.combo = 0; p.stun = STUN; bump(p, 'miss'); say(G, 'miss', lane, e.id);
+  const a = aim(G, lane);
+  if (!a) return null;
+  const { e, lane: tl } = a, assist = tl !== lane;
+  if (dir !== need(e, tl)) {
+    p.combo = 0; p.stun = STUN; p.misses++; bump(p, 'miss'); say(G, 'miss', lane, e.id);
+    G.frenzy = Math.max(0, G.frenzy - 0.05);
     return 'miss';
   }
-  p.combo++; p.best = Math.max(p.best, p.combo);
-  p.score += Math.round(10 * mult(p));
-  p.super = Math.min(1, p.super + SUPER_PER_HIT);
-  if (e.kind === 'boss') e.hits[lane]++; else { e.hit++; e.spin = 0; }
-  say(G, 'hit', lane, e.id, dir);
+  p.combo++; p.hits++; p.best = Math.max(p.best, p.combo);
+  if (assist) p.assists++;
+  p.score += Math.round(10 * mult(G, p));
+  p.super = Math.min(1, p.super + SUPER_PER_HIT * (G.frenzyT > 0 ? 2 : 1));
+  if (e.kind === 'boss') e.hits[tl]++;
+  else {
+    e.hit++; e.spin = 0;
+    e.y = Math.max(0.01, e.y - KNOCK * (KINDS[e.kind].heavy ? 0.5 : 1) * (G.frenzyT > 0 ? 2 : 1));
+  }
+  e.hurt = 0.15;
+  if (G.frenzyT <= 0) {
+    G.frenzy += 1 / (FRENZY_HITS * G.lanes.length);
+    if (G.frenzy >= 1) { G.frenzy = 0; G.frenzyT = FRENZY; team(G, 'frenzy'); say(G, 'frenzy'); }
+  }
+  say(G, 'hit', tl, e.id, dir, lane);
   if (done(e)) { kill(G, e, seat); bump(p, 'kill'); return 'kill'; }
-  bump(p, 'hit');
+  bump(p, assist ? 'assist' : 'hit');
   return 'hit';
 }
 
 const done = e => e.kind === 'boss' ? e.tracks.every((t, i) => e.hits[i] >= t.length) : e.hit >= e.arrows.length;
 
-function kill(G, e, seat) {
+function kill(G, e, seat, how = 'swipe') {
+  if (!G.enemies.includes(e)) return;
   G.enemies = G.enemies.filter(x => x !== e);
   const pts = KINDS[e.kind].points;
   if (e.kind === 'boss') {
     // the boss is a team kill: everyone in the lanes shares it, and the team gets a heart back
     for (const s of G.lanes) { const q = G.players[s]; q.score += pts; q.kills++; }
     G.hearts = Math.min(MAX_HEARTS, G.hearts + 1);
+    team(G, 'boss');
   } else {
-    const p = G.players[seat]; p.score += Math.round(pts * mult(p)); p.kills++;
+    const p = G.players[seat]; p.score += Math.round(pts * mult(G, p)); p.kills++;
   }
-  say(G, 'kill', e.kind === 'boss' ? -1 : e.lane, e.id, e.kind, e.y);
+  say(G, 'kill', e.kind === 'boss' ? -1 : e.lane, e.id, e.kind, e.y, how);
+  if (e.kind === 'gift') power(G, seat, e);
+}
+
+// A popped gift: a random power-up for the whole team.
+function power(G, seat, e) {
+  const p = G.players[seat]; p.gifts++;
+  const options = POWERS.filter(k => k !== 'heal' || G.hearts < MAX_HEARTS);
+  const k = pick(G.r, options);
+  team(G, k);
+  say(G, 'power', k, seat, e.lane);
+  if (k === 'freeze') G.freezeT = FREEZE;
+  else if (k === 'heal') G.hearts = Math.min(MAX_HEARTS, G.hearts + 1);
+  else if (k === 'storm') {
+    // lightning: the front monster of every lane, and two arrows off every row of a boss
+    for (let l = 0; l < G.lanes.length; l++) {
+      const t = targetOf(G, l);
+      if (!t) continue;
+      if (t.kind === 'boss') { t.hits[l] = Math.min(t.tracks[l].length, t.hits[l] + 2); say(G, 'bolt', l, t.y); if (done(t)) kill(G, t, seat, 'storm'); }
+      else { say(G, 'bolt', l, t.y); kill(G, t, seat, 'storm'); }
+    }
+  }
 }
 
 function fireSuper(G, seat, lane, p) {
@@ -180,8 +253,8 @@ function fireSuper(G, seat, lane, p) {
     if (e.kind === 'boss') {
       const t = e.tracks[lane]; if (!t) continue;
       e.hits[lane] = Math.min(t.length, e.hits[lane] + 3);
-      if (done(e)) kill(G, e, seat);
-    } else if (e.lane === lane) kill(G, e, seat);
+      if (done(e)) kill(G, e, seat, 'super');
+    } else if (e.lane === lane) kill(G, e, seat, 'super');
   }
   return 'super';
 }
@@ -191,6 +264,7 @@ function fireSuper(G, seat, lane, p) {
 export function step(G, dt, live = () => true) {
   G.t += dt;
   for (const s of G.lanes) { const p = G.players[s]; if (p.stun > 0) p.stun = Math.max(0, p.stun - dt); }
+  for (const e of G.enemies) if (e.hurt > 0) e.hurt = Math.max(0, e.hurt - dt);
   if (G.phase === 'break') {
     G.timer -= dt;
     return;
@@ -200,6 +274,11 @@ export function step(G, dt, live = () => true) {
   if (!on.some(Boolean)) return; // nobody connected: everything waits
 
   G.timer += dt;
+  if (G.frenzyT > 0) { G.frenzyT = Math.max(0, G.frenzyT - dt); if (!G.frenzyT) say(G, 'frenzy-end'); }
+  else G.frenzy = Math.max(0, G.frenzy - dt * 0.01);
+  if (G.freezeT > 0) G.freezeT = Math.max(0, G.freezeT - dt);
+  const pace = G.freezeT > 0 ? 0.2 : 1;
+
   while (G.queue.length && G.queue[0].at <= G.timer) {
     const q = G.queue[0];
     if (q.kind === 'boss' && G.enemies.length) break;
@@ -219,25 +298,29 @@ export function step(G, dt, live = () => true) {
       e.tracks.forEach((t, i) => { if (!on[i]) e.hits[i] = t.length; });
       if (done(e)) { kill(G, e, G.lanes[0]); continue; }
     } else if (!on[e.lane]) continue;
-    e.y += e.speed * dt;
+    e.y += e.speed * dt * pace;
     if (e.kind === 'spinner' && e.hit === 0) {
-      e.spin += dt;
+      e.spin += dt * pace;
       if (e.spin >= SPIN_EVERY) { e.spin -= SPIN_EVERY; e.arrows[0] = DIRS[(DIRS.indexOf(e.arrows[0]) + 1) % 4]; }
     }
     if (e.y >= 1) {
       G.enemies = G.enemies.filter(x => x !== e);
+      if (e.kind === 'gift') { say(G, 'escape', e.lane, e.id); continue; } // a missed present, not a breach
       const lost = e.kind === 'boss' ? 3 : 1;
-      G.hearts = Math.max(0, G.hearts - lost); G.lost += lost;
+      G.hearts = Math.max(0, G.hearts - lost); G.lost += lost; G.waveLost += lost;
+      G.frenzy = Math.max(0, G.frenzy - 0.25);
       const owners = e.kind === 'boss' ? G.lanes : [G.lanes[e.lane]];
       for (const s of owners) { const p = G.players[s]; p.combo = 0; bump(p, 'ouch'); }
       say(G, 'breach', e.lane, e.id, lost);
-      if (G.hearts <= 0) { G.phase = 'over'; say(G, 'over', G.wave); return; }
+      if (G.hearts <= 0) { G.phase = 'over'; G.frenzyT = 0; G.freezeT = 0; say(G, 'over', G.wave); return; }
     }
   }
 
   if (!G.queue.length && !G.enemies.length) {
-    G.phase = 'break'; G.timer = BREAK;
-    say(G, 'cleared', G.wave);
+    G.phase = 'break'; G.timer = BREAK; G.frenzyT = 0; G.freezeT = 0;
+    const perfect = G.waveLost === 0;
+    if (perfect) { for (const s of G.lanes) G.players[s].score += 100 * G.wave; team(G, 'perfect'); }
+    say(G, 'cleared', G.wave, perfect);
   }
 }
 
@@ -247,4 +330,27 @@ export const breakOver = G => G.phase === 'break' && G.timer <= 0;
 export function ranking(G) {
   return Object.entries(G.players).filter(([s]) => G.lanes.includes(s) || G.players[s].score > 0)
     .sort((a, b) => b[1].score - a[1].score);
+}
+
+// One award each for the results screen, so everybody walks away with something.
+// Categories are handed out in order, each to the best player who has not got one yet.
+const AWARDS = [
+  ['🗡️', 'Monster Masher', 'most monsters', p => p.kills],
+  ['🔥', 'Combo Machine', 'longest combo', p => p.best],
+  ['😇', 'Guardian Angel', 'most assists', p => p.assists],
+  ['🎯', 'Sharpshooter', 'most accurate', p => p.hits >= 5 ? p.hits / (p.hits + p.misses) : 0],
+  ['🎁', 'Gift Grabber', 'most gifts popped', p => p.gifts],
+  ['💫', 'Dizzy Dancer', 'most wrong swipes', p => p.misses],
+  ['🧱', 'Brick in the Wall', 'held the line', () => 0.001],
+];
+export function awards(G) {
+  const out = {}, rows = ranking(G);
+  for (const [icon, title, why, f] of AWARDS) {
+    const free = rows.filter(([s]) => !out[s]);
+    if (!free.length) break;
+    const [s, p] = free.reduce((a, b) => (f(b[1]) > f(a[1]) ? b : a));
+    if (f(p) > 0) out[s] = { icon, title, why };
+  }
+  for (const [s] of rows) out[s] ??= { icon: '🧱', title: 'Brick in the Wall', why: 'held the line' };
+  return out;
 }

@@ -88,6 +88,7 @@ addEventListener('resize', fit); fit(); requestAnimationFrame(fit);
 
 // Bots: read the TV's game state and swipe what their lane needs, with a human-ish delay and the odd mistake.
 const DIRS = ['u', 'r', 'd', 'l'], wait = new Map();
+let overSince = 0;
 setInterval(() => {
   const game = tv.contentWindow?.frolic; if (!game) return;
   const { G, mode, need } = game, now = performance.now(), skill = +$('skill').value;
@@ -96,15 +97,17 @@ setInterval(() => {
     if (!p.bot.checked || !pad || !pad.seat) return;
     if ((now - (wait.get(i) || 0)) < 0) return;
     const seat = pad.seat;
-    if (mode === 'lobby' || G.phase === 'over') { pad.send('u'); wait.set(i, now + 1500); return; } // ready up (repeats are ignored)
+    if (G.phase === 'over' && !overSince) overSince = now;
+    if (G.phase !== 'over') overSince = 0;
+    // ready up (repeats are ignored); on the results, give people time to read them first
+    if (mode === 'lobby' || G.phase === 'over') { if (mode === 'lobby' || now - overSince > 8000) pad.send('u'); wait.set(i, now + 1500); return; }
     if (mode !== 'play' || G.phase !== 'wave') return;
     const lane = G.lanes.indexOf(seat), me = G.players[seat];
     if (lane < 0 || me.stun > 0) return;
     if (me.super >= 1) { pad.send('tap'); wait.set(i, now + 400); return; }
-    let best = null;
-    for (const e of G.enemies) if (e.y > 0.15 && need(e, lane) && (!best || e.y > best.y)) best = e;
-    if (!best) return;
-    const d = need(best, lane);
+    const a = game.aim(G, lane);
+    if (!a || a.e.y < 0.15) return;
+    const d = need(a.e, a.lane);
     pad.send(Math.random() < skill ? d : DIRS[(DIRS.indexOf(d) + 1 + Math.floor(Math.random() * 3)) % 4]);
     wait.set(i, now + 220 + Math.random() * 380);
   });

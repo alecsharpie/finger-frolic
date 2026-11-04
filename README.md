@@ -12,15 +12,21 @@ your wall, in order, before it gets there. Up to 8 players, co-op, waves until t
 
 | | |
 |---|---|
-| 👆 Swipe the arrows | Each monster in your lane carries arrows. Swipe them in order, nearest monster first. |
-| 💫 Wrong way = dizzy | A wrong swipe stuns you for half a second and resets your combo. |
-| ⚡ Super | Good swipes fill your meter. When it's full, **tap** to wipe out your lane. |
-| ❤️ Hearts | The team shares 5. Each monster that reaches the wall costs one; the game ends at zero. |
+| 👆 Swipe the arrows | Each monster in your lane carries arrows. Swipe them in order, nearest monster first. Every good hit knocks it back up the lane. |
+| 💫 Wrong way = dizzy | A wrong swipe stuns you for half a second and resets your combo. 10, 20, 30… combos get flames and a bigger multiplier. |
+| 🤝 Help a neighbour | When your lane is clear, your swipes go to the closest monster in the lanes next to you. |
+| 🎁 Gifts | Golden boxes from wave 2. Pop one and the team gets a power-up: ❄️ freeze (everything crawls for 5 s), ❤️ a heart back, or ⚡ lightning (zaps the front monster in every lane). A gift that gets away costs nothing. |
+| 🔥 Team frenzy | Everyone's good swipes fill a shared meter (wrong swipes and breaches drain it). When it's full: 8 s of double points, double knockback and twice-as-fast supers. |
+| ⚡ Super | Good swipes fill your own meter. When it's full, **tap** to wipe out your lane. |
+| ❤️ Hearts | The team shares 5 (up to 8). Each monster that reaches the wall costs one; the game ends at zero. A wave with no breach is a ✨ perfect wave: +100 × wave each. |
 | 👑 Boss | Every 5th wave ends with a boss as wide as the field. Each player has their own row of its arrows, and it only falls when everyone finishes theirs (+1 heart). |
 
 Monsters: 🟢 grunt (1 arrow) · 🟣 brute (2–3, slow) from wave 2 · 🟠 runner (fast) from wave 3 ·
 🔵 spinner (its arrow turns until you hit it) from wave 4 · 🔴 trickster (red arrows mean swipe the *opposite*
-way) from wave 6.
+way) from wave 6. The TV announces each one the wave it first appears.
+
+At the end, everyone gets an award (Monster Masher, Combo Machine, Guardian Angel, Sharpshooter, Gift Grabber,
+Dizzy Dancer…) on the TV and on their phone.
 
 Drop-in, drop-out: new phones can scan in at any time and join at the next wave. A phone that locks or drops
 gets its seat back when it reconnects; while it's gone, the monsters in its lane wait for it.

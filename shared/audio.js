@@ -171,3 +171,11 @@ Object.assign(Sfx.prototype, {
   boom() { this.bomb(); this.cheer(); },
   horn() { [392, 523].forEach((f, i) => this.tone(f, 0.35, { type: 'sawtooth', vol: 0.1, delay: i * 0.18 })); },
 });
+
+Object.assign(Sfx.prototype, {
+  chime() { [1568, 2093, 2637].forEach((f, i) => this.tone(f, 0.25, { type: 'sine', vol: 0.12, delay: i * 0.07 })); },
+  freeze() { [2637, 2349, 2093, 1760, 1568].forEach((f, i) => this.tone(f, 0.4, { type: 'triangle', vol: 0.1, delay: i * 0.05 })); this.noise(0.8, { vol: 0.12, freq: 6000, type: 'highpass' }); },
+  heal() { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.25, { type: 'sine', vol: 0.15, delay: i * 0.05 })); },
+  zap() { this.noise(0.5, { vol: 0.6, freq: 3000, slide: 200, type: 'bandpass', q: 0.7 }); this.tone(1200, 0.3, { type: 'sawtooth', vol: 0.12, slide: 60 }); this.bomb(); },
+  frenzy() { [392, 494, 587, 784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.14, { type: 'square', vol: 0.09, delay: i * 0.045 })); this.whoosh(); },
+});

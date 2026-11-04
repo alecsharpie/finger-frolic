@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, startGame, step, swipe, need, targetOf, planWave, breakOver, startWave, KINDS, OPPOSITE, STUN, START_HEARTS, BOSS_EVERY } from '../game.js';
+import { newGame, startGame, step, swipe, need, targetOf, aim, planWave, breakOver, startWave, awards, KINDS, OPPOSITE, STUN, START_HEARTS, BOSS_EVERY, KNOCK, FRENZY_HITS, ASSIST_FROM } from '../game.js';
 
 const run = (G, secs, live) => { for (let i = 0; i < secs * 30; i++) step(G, 1 / 30, live); };
 const firstOnField = G => { for (let i = 0; i < 3000 && !G.enemies.some(e => e.y > 0); i++) step(G, 1 / 30); return targetOf(G, 0); };
@@ -27,13 +27,72 @@ test('right swipes clear a monster, wrong swipes stun and drop the combo', () =>
   assert.ok(G.players.p1.score > 0); assert.equal(G.players.p1.kills, 1);
 });
 
-test('swipes only reach your own lane', () => {
-  const G = newGame(3); startGame(G, ['p1', 'p2']);
-  for (let i = 0; i < 3000 && !G.enemies.some(e => e.y > 0 && e.lane === 0); i++) step(G, 1 / 30);
-  const e = G.enemies.find(e => e.lane === 0);
-  const before = e.hit;
-  if (!targetOf(G, 1)) assert.equal(swipe(G, 'p2', need(e, 0)), null);
-  assert.equal(e.hit, before);
+const grunt = (id, lane, y, arrows = ['u']) => ({ id, kind: 'grunt', lane, y, speed: 0, hit: 0, arrows, spin: 0, hurt: 0 });
+
+test('your own lane comes first; when it is clear you help a neighbour, but only once their monster is close', () => {
+  const G = newGame(3); startGame(G, ['p1', 'p2', 'p3']); G.queue = [];
+  G.enemies = [grunt(1, 0, ASSIST_FROM - 0.05, ['u', 'u']), grunt(2, 2, 0.6, ['l', 'l'])];
+  assert.equal(aim(G, 1).lane, 2, 'p2 helps the more urgent neighbour');
+  assert.equal(aim(G, 0).lane, 0, 'p1 has its own monster');
+  assert.equal(aim(G, 2).lane, 2);
+  G.enemies = [grunt(1, 0, ASSIST_FROM - 0.05)];
+  assert.equal(aim(G, 1), null, 'too far up the lane to help with yet');
+  assert.equal(aim(G, 2), null, 'not a neighbour');
+  G.enemies = [grunt(1, 0, 0.5, ['u', 'r'])];
+  assert.equal(swipe(G, 'p2', 'u'), 'hit');
+  assert.equal(G.players.p2.assists, 1); assert.equal(G.enemies[0].hit, 1);
+});
+
+test('a good hit knocks the monster back up its lane', () => {
+  const G = newGame(9); startGame(G, ['p1']); G.queue = [];
+  G.enemies = [grunt(1, 0, 0.5, ['u', 'u'])];
+  swipe(G, 'p1', 'u');
+  assert.ok(Math.abs(G.enemies[0].y - (0.5 - KNOCK)) < 1e-9);
+});
+
+test('popping a gift gives the team a power-up; a gift that gets through costs nothing', () => {
+  for (let seed = 1; seed < 40; seed++) {
+    const G = newGame(seed); startGame(G, ['p1', 'p2']); G.queue = []; G.hearts = 3;
+    G.enemies = [{ ...grunt(1, 0, 0.5, ['u']), kind: 'gift' }, grunt(2, 1, 0.4, ['d', 'd'])];
+    assert.equal(swipe(G, 'p1', 'u'), 'kill');
+    const [, k] = G.log.find(l => l[0] === 'power');
+    if (k === 'heal') assert.equal(G.hearts, 4);
+    if (k === 'freeze') assert.ok(G.freezeT > 0);
+    if (k === 'storm') assert.equal(G.enemies.length, 0, 'lightning hits every lane');
+    assert.equal(G.players.p1.gifts, 1);
+  }
+  const G = newGame(1); startGame(G, ['p1']); G.queue = [];
+  G.enemies = [{ ...grunt(1, 0, 0.99), kind: 'gift', speed: 1 }];
+  step(G, 0.1); assert.equal(G.hearts, START_HEARTS);
+});
+
+test('freeze slows the field to a crawl', () => {
+  const G = newGame(2); startGame(G, ['p1']); G.queue = [];
+  G.enemies = [{ ...grunt(1, 0, 0.2), speed: 0.1 }, grunt(9, 0, 0.1)];
+  G.freezeT = 5; step(G, 1);
+  assert.ok(G.enemies[0].y < 0.2 + 0.1 * 0.5);
+});
+
+test('enough good swipes from the team set off a frenzy with double points', () => {
+  const G = newGame(4); startGame(G, ['p1']); G.queue = [];
+  G.enemies = [grunt(1, 0, 0.5, Array(FRENZY_HITS + 3).fill('u'))];
+  for (let i = 0; i < FRENZY_HITS; i++) swipe(G, 'p1', 'u');
+  assert.ok(G.frenzyT > 0); assert.equal(G.tlast, 'frenzy');
+  const before = G.players.p1.score; swipe(G, 'p1', 'u');
+  assert.ok(G.players.p1.score - before >= 30, 'frenzy doubles (on top of the combo bonus)');
+});
+
+test('a wave without a breach is perfect and pays a bonus', () => {
+  const G = newGame(5); startGame(G, ['p1']); G.queue = []; G.enemies = [grunt(1, 0, 0.5)];
+  swipe(G, 'p1', 'u'); const before = G.players.p1.score; step(G, 0.1);
+  assert.equal(G.phase, 'break'); assert.equal(G.players.p1.score, before + 100); assert.equal(G.tlast, 'perfect');
+});
+
+test('everyone gets a different award', () => {
+  const G = newGame(6); startGame(G, ['p1', 'p2', 'p3']);
+  Object.assign(G.players.p1, { kills: 9, score: 900 }); Object.assign(G.players.p2, { best: 20, score: 500 }); Object.assign(G.players.p3, { assists: 4, score: 100 });
+  const A = awards(G);
+  assert.equal(A.p1.title, 'Monster Masher'); assert.equal(A.p2.title, 'Combo Machine'); assert.equal(A.p3.title, 'Guardian Angel');
 });
 
 test('a full super clears your lane with a tap', () => {
