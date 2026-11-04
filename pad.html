@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1a1033">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Finger Frolic · Pad</title>
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+  html, body { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  body { --c: var(--accent); display: flex; flex-direction: column; padding: calc(10px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 60%, color-mix(in srgb, var(--c) 28%, var(--bg)) 0%, var(--bg) 70%); transition: background .3s; }
+  body.stun { --c: #8a8a9a; }
+  .top { display: flex; align-items: center; gap: 10px; font-size: 18px; white-space: nowrap; min-height: 34px; }
+  .top .me { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 20px; overflow: hidden; text-overflow: ellipsis; }
+  .top .blob { width: 20px; height: 20px; border-radius: 50%; background: var(--c); flex: none; }
+  .top .sp { flex: 1; }
+  .top .hearts { font-size: 16px; letter-spacing: -2px; }
+  .stats { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
+  .stats .score { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .stats .combo { font-size: 22px; font-weight: 900; color: var(--c); }
+  .zone { flex: 1; position: relative; display: grid; place-items: center; margin: 12px 0; border-radius: 28px; border: 3px dashed color-mix(in srgb, var(--c) 60%, transparent); text-align: center; }
+  .zone .big { font-size: 34px; font-weight: 900; line-height: 1.15; padding: 0 12px; }
+  .zone .big small { display: block; font-size: 18px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
+  .zone .num { font-size: 140px; font-weight: 900; }
+  .flash { position: absolute; left: 50%; top: 50%; font-size: 150px; line-height: 1; color: var(--c); pointer-events: none; opacity: 0; transform: translate(-50%, -50%); }
+  .flash.go { animation: fl .32s ease-out; }
+  @keyframes fl { from { opacity: .95; transform: translate(-50%, -50%) scale(1.15); } to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.8); } }
+  .meter { height: 22px; border-radius: 11px; background: rgba(0,0,0,.35); overflow: hidden; position: relative; }
+  .meter i { position: absolute; inset: 0 auto 0 0; background: var(--c); border-radius: 11px; transition: width .15s; }
+  .meter b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 900; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 2px #000; }
+  .meter.full i { animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+  .form { margin: auto 0; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+  .form h1 { margin: 0 0 6px; font-size: 40px; }
+  .form h1 span { color: var(--accent); }
+  .form input { font-size: 26px; padding: 14px; border-radius: var(--radius); border: 2px solid var(--line); background: var(--bg-2); text-align: center; width: 100%; touch-action: manipulation; user-select: text; -webkit-user-select: text; }
+  .form input.code { letter-spacing: .25em; text-transform: uppercase; font-weight: 900; }
+  .form .btn { min-height: 72px; font-size: 24px; }
+  .note { color: var(--ink-2); font-size: 15px; }
+  .shake { animation: shake .3s; }
+  @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-10px) rotate(-2deg); } 75% { transform: translateX(10px) rotate(2deg); } }
+</style>
+</head>
+<body>
+<div id="join" class="form">
+  <h1>Finger <span>Frolic</span></h1>
+  <input id="name" maxlength="12" placeholder="Your name" autocomplete="nickname" enterkeyhint="go">
+  <input id="room" class="code" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters">
+  <button id="go" class="btn go">Join the wall</button>
+  <div class="note">The code is on the TV.</div>
+</div>
+<div id="pad" class="hidden" style="display:contents">
+  <div class="top"><span class="me"><span class="blob"></span><span id="me"></span></span><span class="sp"></span><span id="wave"></span><span class="hearts" id="hearts"></span></div>
+  <div class="stats"><span class="score" id="score">0</span><span class="combo" id="combo"></span></div>
+  <div class="zone" id="zone"><div id="msg" class="big"></div><div class="flash" id="flash"></div></div>
+  <div class="meter" id="meter"><i id="fill" style="width:0"></i><b id="mtext">SUPER</b></div>
+</div>
+<script type="module">
+import { joinRoom, param, load, save } from './shared/net.js';
+import { seatColor } from './draw.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const buzz = p => { try { navigator.vibrate?.(p); } catch (e) {} };
+
+$('name').value = param('name') || load('frolic-name', '');
+$('room').value = (param('room') || '').toUpperCase();
+if (param('room')) $('room').classList.add('hidden');
+
+let net = null, seat = null, status = 'connecting', S = null, prev = null;
+
+function start() {
+  const name = $('name').value.trim().slice(0, 12), code = $('room').value.trim().toUpperCase();
+  if (!/^[A-HJ-NP-Z2-9]{5}$/.test(code)) { $('room').classList.remove('hidden'); $('room').focus(); $('room').classList.add('shake'); setTimeout(() => $('room').classList.remove('shake'), 300); return; }
+  save('frolic-name', name);
+  $('join').classList.add('hidden'); $('pad').classList.remove('hidden');
+  net = joinRoom({
+    room: code, name, want: param('want'),
+    onSeat: s => { seat = s; document.body.style.setProperty('--c', seatColor(s)); render(); },
+    onMessage: m => { if (m && m.t === 's') { prev = S; S = m; feel(); render(); } },
+    onStatus: s => { status = s; render(); },
+  });
+  render();
+}
+$('go').onclick = start;
+$('name').addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
+
+// ---------- what the phone shows ----------
+const mine = () => (S && seat && S.p[seat]) || null;
+function render() {
+  if (!net) return;
+  const me = mine(), ph = S?.ph;
+  $('me').textContent = me ? me[8] : ($('name').value || 'You');
+  $('wave').textContent = S && S.w ? `Wave ${S.w}` : '';
+  $('hearts').textContent = S && S.w ? '❤️'.repeat(Math.max(0, S.h)) : '';
+  $('score').textContent = me ? me[0].toLocaleString() : '0';
+  $('combo').textContent = me && me[1] >= 2 ? `${me[1]}× combo` : '';
+  const sup = me ? me[2] : 0;
+  $('fill').style.width = sup + '%';
+  $('meter').classList.toggle('full', sup >= 100);
+  $('mtext').textContent = sup >= 100 ? 'TAP FOR SUPER!' : 'SUPER';
+  document.body.classList.toggle('stun', !!(me && me[3]));
+
+  let msg;
+  if (status === 'full') msg = 'This game is full<small>8 players max. Hang on and try again later.</small>';
+  else if (status !== 'open' || !seat) msg = `Connecting…<small>${status === 'waiting' ? 'looking for the TV' : ''}</small>`;
+  else if (!S) msg = 'Connected!';
+  else if (ph === 'lobby' || ph === 'over') {
+    let head = '';
+    if (ph === 'over' && S.rank) {
+      const i = S.rank.indexOf(seat);
+      head = i >= 0 ? `<div style="font-size:60px">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</div><div style="margin-bottom:18px">${me[0].toLocaleString()} points</div>` : '';
+    }
+    msg = me && me[7]
+      ? `${head}✓ Ready!<small>waiting for the others (${Object.values(S.p).filter(p => p[7]).length}/${S.n})</small>`
+      : `${head}Swipe <span style="color:var(--c)">UP</span><br>when you're ready<small>${ph === 'over' ? 'to play again' : 'everyone swipes up to start'}</small>`;
+  }
+  else if (ph === 'countdown') msg = `<div class="num">${S.cd || 'GO'}</div>`;
+  else if (me && me[6] < 0) msg = `You're in!<small>${ph === 'break' ? 'joining the wall now' : 'you join at the next wave, get ready'}</small>`;
+  else if (me && me[3]) msg = '💫 Dizzy!<small>wrong way, hold on</small>';
+  else if (ph === 'break') msg = `Wave cleared!<small>next one in ${S.cd}…</small>`;
+  else msg = sup >= 100 ? '⚡ TAP! ⚡<small>for a super that clears your lane</small>' : 'Swipe!<small>match the arrows over the monster in your lane</small>';
+  if ($('msg').innerHTML !== msg) $('msg').innerHTML = msg;
+}
+
+// buzz for what happened on the TV (my ev counter moves on each event; last says which)
+function feel() {
+  const a = prev && seat && prev.p[seat], b = mine();
+  if (!b) return;
+  if (a && b[4] !== a[4]) buzz({ hit: 12, kill: [20, 30, 25], miss: [70, 40, 70], super: [40, 30, 160], ouch: 220 }[b[5]] || 10);
+  else if (prev && S.h < prev.h) buzz(60);
+  if (prev && prev.ph !== S.ph && S.ph === 'wave') buzz([30, 60, 30]);
+}
+
+// ---------- swipes ----------
+const ARROW = { u: '⬆', d: '⬇', l: '⬅', r: '➡' }, OFF = { u: [0, -60], d: [0, 60], l: [-60, 0], r: [60, 0] };
+function send(s) {
+  if (!net) return;
+  net.act({ s });
+  if (s === 'tap') { buzz(15); return; }
+  buzz(6);
+  const f = $('flash');
+  f.textContent = ARROW[s]; f.style.setProperty('--dx', OFF[s][0] + 'px'); f.style.setProperty('--dy', OFF[s][1] + 'px');
+  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+}
+
+// A swipe fires as soon as the finger has moved far enough, not on release, so it feels instant. One per touch.
+const touches = new Map();
+const MIN = 26, TAP = 14;
+addEventListener('pointerdown', e => {
+  if (!net || e.target.closest('input,button')) return;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), done: false });
+}, { passive: true });
+addEventListener('pointermove', e => {
+  const s = touches.get(e.pointerId); if (!s || s.done) return;
+  const dx = e.clientX - s.x, dy = e.clientY - s.y;
+  if (Math.hypot(dx, dy) < MIN) return;
+  s.done = true;
+  send(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'));
+}, { passive: true });
+const up = e => {
+  const s = touches.get(e.pointerId); touches.delete(e.pointerId);
+  if (!s || s.done) return;
+  if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < TAP && performance.now() - s.t < 400) send('tap');
+};
+addEventListener('pointerup', up); addEventListener('pointercancel', e => touches.delete(e.pointerId));
+document.addEventListener('touchmove', e => { if (!e.target.closest('input')) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+// keys, for testing on a laptop
+const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap' };
+addEventListener('keydown', e => { if (net && KEY[e.key] && !e.repeat && !e.target.closest('input')) { e.preventDefault(); send(KEY[e.key]); } });
+if (param('auto') != null) start();
+</script>
+</body>
+</html>

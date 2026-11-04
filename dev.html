@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finger Frolic · Dev</title>
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+  body { display: grid; grid-template-columns: 1fr repeat(var(--n), 260px); gap: 8px; padding: 8px; height: 100vh; }
+  iframe { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+</style>
+</head>
+<body>
+<!-- The TV and N phones over BroadcastChannel (?net=local): no relay, no phones. ?players=3 sets N (1-4).
+     Click a phone frame, then use the arrow keys (space = tap). -->
+<script>
+  const n = Math.max(1, Math.min(4, +new URLSearchParams(location.search).get('players') || 3)), room = 'DEVXX';
+  document.body.style.setProperty('--n', n);
+  const frame = src => { const f = document.createElement('iframe'); f.src = src; document.body.appendChild(f); };
+  frame(`index.html?net=local&room=${room}`);
+  const names = ['Ada', 'Bo', 'Cy', 'Di'];
+  for (let i = 0; i < n; i++) frame(`pad.html?net=local&room=${room}&cid=dev-${i}&name=${names[i]}&auto`);
+</script>
+</body>
+</html>

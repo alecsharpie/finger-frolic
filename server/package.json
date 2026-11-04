@@ -1,0 +1,13 @@
+{
+  "name": "frolic-relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787 --ip 0.0.0.0",
+    "test": "node --test test/room.test.mjs",
+    "deploy": "./deploy.sh"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

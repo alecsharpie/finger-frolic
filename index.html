@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finger Frolic</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+  html, body { overflow: hidden; cursor: default; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  .over { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(20, 12, 40, .55); }
+  .card { display: grid; grid-template-columns: auto 1fr; gap: 4vh 3vw; align-items: start; width: min(1200px, 100%); padding: 4vh 3vw; background: var(--panel); border: 2px solid var(--line); border-radius: 28px; box-shadow: 0 20px 80px rgba(0,0,0,.5); }
+  .title { font-size: clamp(36px, 6vh, 72px); font-weight: 900; margin: 0; letter-spacing: -.01em; }
+  .title span { color: var(--accent); }
+  .qr { background: #fff; padding: 10px; border-radius: 18px; width: min(30vh, 300px); aspect-ratio: 1; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .code { font-size: clamp(36px, 7vh, 80px); font-weight: 900; letter-spacing: .14em; color: var(--accent); line-height: 1; margin-top: 1.5vh; }
+  .url { color: var(--ink-2); font-size: clamp(13px, 1.8vh, 18px); word-break: break-all; margin-top: 6px; }
+  .warn { color: var(--bad); font-size: 16px; margin-top: 8px; }
+  .players { display: flex; flex-wrap: wrap; gap: 10px; margin: 2.5vh 0; min-height: 56px; }
+  .pl { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: var(--bg-2); border: 3px solid var(--c); font-size: clamp(16px, 2.4vh, 24px); font-weight: 800; }
+  .pl .blob { width: 22px; height: 22px; border-radius: 50%; background: var(--c); }
+  .pl.off { opacity: .45; }
+  .pl .ok { color: var(--good); }
+  .empty { color: var(--ink-2); font-size: 20px; align-self: center; }
+  .how { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .how div { padding: 14px; border-radius: 16px; background: var(--bg-2); font-size: clamp(14px, 1.9vh, 19px); line-height: 1.35; }
+  .how b { display: block; font-size: 1.15em; margin-bottom: 4px; }
+  .prompt { font-size: clamp(18px, 2.8vh, 28px); font-weight: 800; }
+  .prompt .btn { margin-left: 12px; vertical-align: middle; }
+  .rank { width: 100%; border-collapse: collapse; font-size: clamp(16px, 2.4vh, 26px); margin: 2vh 0; }
+  .rank td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .rank td.n { width: 1%; white-space: nowrap; font-weight: 900; }
+  .rank td.s { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .rank small { color: var(--ink-2); font-weight: 600; }
+  #banner { position: fixed; left: 0; right: 0; top: 36vh; text-align: center; pointer-events: none; font-size: clamp(48px, 12vh, 140px); font-weight: 900; color: #fff; text-shadow: 0 6px 0 rgba(20,10,40,.6), 0 0 40px rgba(0,0,0,.4); }
+  #banner small { display: block; font-size: .3em; font-weight: 800; color: var(--accent); }
+  #corner { position: fixed; right: 2vh; top: 1.6vh; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; border-radius: 16px; background: rgba(20,12,40,.7); font-size: 16px; color: var(--ink-2); }
+  #corner .qr { width: 9vh; padding: 4px; border-radius: 8px; }
+  #corner b { display: block; color: var(--accent); font-size: 26px; letter-spacing: .1em; }
+  #sound { position: fixed; left: 50%; bottom: 2vh; transform: translateX(-50%); }
+  #status { position: fixed; left: 2vh; bottom: 2vh; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="banner"></div>
+<div id="corner" class="hidden"></div>
+<div id="lobby" class="over"></div>
+<div id="results" class="over hidden"></div>
+<button id="sound" class="btn sm">🔇 Click anywhere for sound</button>
+<div id="status" class="chip hidden"></div>
+<script type="module">
+import { hostRoom, param } from './shared/net.js';
+import { findLan, joinUrl, qrSvg, stuckOnLocalhost } from './shared/lobby.js';
+import { Sfx } from './shared/audio.js';
+import { SEATS, KINDS, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, need, isBossWave } from './game.js';
+import { drawField, tickFx, fx, burst, popup, slash, seatColor, layout } from './draw.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cv = $('cv'), ctx = cv.getContext('2d');
+const sfx = new Sfx();
+
+let G = newGame();
+let mode = 'lobby';         // lobby | countdown | play (then G.phase says wave / break / over)
+let countdown = 0, bannerUntil = 0;
+const ready = new Set();
+const offSince = {};
+
+await findLan();
+const room = hostRoom({ game: 'frolic', seats: SEATS, onSeats: () => { dirty = true; renderOverlays(); }, onAction, onStatus });
+const url = joinUrl(room.room);
+const qr = qrSvg(url);
+
+const live = s => room.connected(s);
+const nameOf = s => (room.seat(s)?.name || '').trim() || 'Player ' + s.slice(1);
+const present = () => SEATS.filter(s => room.seat(s) && live(s));
+
+function onStatus(s, e) {
+  const el = $('status');
+  el.classList.toggle('hidden', s === 'open');
+  el.innerHTML = s === 'retrying' ? `<span class="dot"></span> ${esc(e?.message || 'reconnecting to the game server')}…` : '<span class="dot"></span> connecting…';
+}
+
+// ---------- input from phones ----------
+function onAction(seat, body) {
+  if (!body || typeof body.s !== 'string') return;
+  addPlayer(G, seat, nameOf(seat));
+  if (mode === 'lobby' || (mode === 'play' && G.phase === 'over')) {
+    if (body.s === 'u' && !ready.has(seat)) { ready.add(seat); sfx.tick(); dirty = true; renderOverlays(); maybeStart(); }
+    return;
+  }
+  if (mode !== 'play') return;
+  const res = swipe(G, seat, body.s);
+  if (res) dirty = true;
+  drainLog();
+}
+
+function maybeStart() {
+  const here = present();
+  if (here.length && here.every(s => ready.has(s))) beginCountdown();
+}
+
+function beginCountdown() {
+  if (!present().length) return;
+  mode = 'countdown'; countdown = 3.99; ready.clear(); dirty = true;
+  sfx.select();
+  renderOverlays();
+}
+
+// ---------- turning rules events into sound and sparkle ----------
+let Lo = null;
+function drainLog() {
+  if (!Lo) { G.log.length = 0; return; }
+  const H = cv.height;
+  for (const [k, ...a] of G.log.splice(0)) {
+    if (k === 'hit') {
+      const [lane, id] = a, e = G.enemies.find(x => x.id === id), seat = G.lanes[lane], p = G.players[seat];
+      const hx = Lo.laneX(lane), hy = Lo.wall;
+      if (e) { const ey = Lo.yOf(e.y); slash(hx, hy, hx + (Math.random() - 0.5) * 30, ey, seatColor(seat)); burst(hx, ey - 30, seatColor(seat), 6, 220); }
+      fx.lunge[seat] = 1;
+      sfx.slash(p.combo);
+      if (p.combo && p.combo % 10 === 0) popup(hx, hy - H * 0.12, `${p.combo} combo!`, seatColor(seat), H * 0.04);
+    } else if (k === 'miss') {
+      const [lane] = a; sfx.wrong(); popup(Lo.laneX(lane), Lo.wall - H * 0.1, 'dizzy!', '#ffe14d', H * 0.035);
+    } else if (k === 'kill') {
+      const [lane, , kind, y] = a, ey = Lo.yOf(y);
+      if (kind === 'boss') {
+        sfx.boom(); fx.shake = 30; fx.flash = 1; fx.flashColor = '#ffd23f';
+        for (let i = 0; i < G.lanes.length; i++) burst(Lo.laneX(i), ey, '#ffd23f', 40, 700);
+        popup(cv.width / 2, ey - H * 0.1, `BOSS DOWN! +${KINDS.boss.points} each, +1 ❤️`, '#ffd23f', H * 0.06);
+      } else {
+        sfx.splat(); burst(Lo.laneX(lane), ey, '#ffffff', 10, 300); burst(Lo.laneX(lane), ey, colorOf(kind), 22, 480);
+        popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points, '#fff', H * 0.035);
+      }
+    } else if (k === 'super') {
+      const [lane] = a, x = Lo.laneX(lane);
+      sfx.bomb(); fx.shake = 18; fx.flash = 0.8; fx.flashColor = seatColor(G.lanes[lane]);
+      for (let i = 0; i < 6; i++) burst(x, Lo.top + (Lo.wall - Lo.top) * (i / 5), seatColor(G.lanes[lane]), 16, 500);
+      popup(x, (Lo.top + Lo.wall) / 2, 'SUPER!', '#fff', H * 0.07);
+    } else if (k === 'breach') {
+      const [lane, , lost] = a;
+      sfx.breach(); fx.shake = 22; fx.flash = 1; fx.flashColor = '#ff3355';
+      popup(lane >= 0 ? Lo.laneX(lane) : cv.width / 2, Lo.wall - H * 0.05, `−${lost} ❤️`, '#ff6b7f', H * 0.05);
+    } else if (k === 'wave') {
+      const [n] = a; sfx.horn(); banner(isBossWave(n) ? `Wave ${n}<small>👑 BOSS WAVE: everyone clears their row</small>` : `Wave ${n}`, 2.2);
+      sfx.bpm = 116 + Math.min(40, n * 3);
+    } else if (k === 'cleared') {
+      sfx.cheer(); banner(`Wave ${a[0]} cleared!<small>next wave in a moment, new players can join now</small>`, 3.2);
+    } else if (k === 'over') {
+      sfx.stopMusic(); sfx.hurt(); ready.clear(); renderOverlays();
+    }
+  }
+}
+const colorOf = kind => ({ grunt: '#6fd36a', brute: '#9b6bff', runner: '#ff9f43', spinner: '#3fd2d0', trickster: '#ff5d73' }[kind] || '#fff');
+
+function banner(html, secs) { $('banner').innerHTML = html; bannerUntil = performance.now() + secs * 1000; }
+
+// ---------- the TV's overlays ----------
+const HOW = `
+  <div class="how">
+    <div><b>👆 Swipe the arrows</b>Each monster in your lane carries arrows. Swipe them on your phone, in order, nearest monster first.</div>
+    <div><b>💫 Wrong way = dizzy</b>A wrong swipe stuns you for a moment and drops your combo. Accuracy beats speed.</div>
+    <div><b>🟥 Red arrows lie</b>From wave 6, red arrows mean swipe the <i>opposite</i> way. Teal spinners turn until you hit them.</div>
+    <div><b>⚡ Tap for super</b>Good swipes fill your meter. When it is full, tap the phone to clear your lane. Every 5th wave a boss needs all of you.</div>
+  </div>`;
+
+function playersHtml(showReady) {
+  const seats = SEATS.filter(s => room.seat(s));
+  if (!seats.length) return '<div class="empty">Waiting for phones…</div>';
+  return seats.map(s => `<div class="pl${live(s) ? '' : ' off'}" style="--c:${seatColor(s)}"><span class="blob"></span>${esc(nameOf(s))}${showReady ? (ready.has(s) ? ' <span class="ok">✓ ready</span>' : '') : ''}${live(s) ? '' : ' <small>reconnecting…</small>'}</div>`).join('');
+}
+
+function joinHtml() {
+  return `<div class="qr">${qr}</div>`;
+}
+
+function renderOverlays() {
+  const lobby = mode === 'lobby', over = mode === 'play' && G.phase === 'over';
+  $('lobby').classList.toggle('hidden', !lobby);
+  $('results').classList.toggle('hidden', !over);
+  $('corner').classList.toggle('hidden', lobby || over);
+  const here = present(), waiting = here.filter(s => !ready.has(s)).length;
+  const prompt = here.length
+    ? `${waiting ? `Everyone swipe <span style="color:var(--accent)">UP</span> on your phone when ready (${here.length - waiting}/${here.length})` : 'Starting…'}`
+    : 'Scan the code with your phone to join (up to 8 players)';
+  if (lobby) {
+    const html = `<div class="card">
+      ${joinHtml()}
+      <div>
+        <h1 class="title">Finger <span>Frolic</span></h1>
+        <div style="color:var(--ink-2);font-size:clamp(16px,2.2vh,22px)">Hold the wall! Monsters march down your lane. Your phone is your sword.</div>
+        <div class="code">${esc(room.room)}</div>
+        <div class="url">${esc(url)}</div>
+        ${stuckOnLocalhost(url) ? '<div class="warn">This TV page is on localhost, so phones cannot reach that link. Run <b>npm start</b> and open the address it prints.</div>' : ''}
+        <div class="players">${playersHtml(true)}</div>
+        <div class="prompt">${prompt} ${here.length ? '<button class="btn sm go" data-act="start">Start now</button>' : ''}</div>
+      </div>
+      ${HOW}
+    </div>`;
+    if ($('lobby').innerHTML !== html) $('lobby').innerHTML = html;
+  }
+  if (over) {
+    const rows = ranking(G).map(([s, p], i) => `<tr><td class="n">${['🥇', '🥈', '🥉'][i] || i + 1}</td>
+      <td><span style="color:${seatColor(s)};font-weight:900">${esc(nameOf(s))}</span> <small>${p.kills} monsters · best combo ${p.best}</small></td>
+      <td class="s">${p.score.toLocaleString()}</td></tr>`).join('');
+    const html = `<div class="card">
+      ${joinHtml()}
+      <div>
+        <h1 class="title">The wall fell on <span>wave ${G.wave}</span></h1>
+        <table class="rank">${rows}</table>
+        <div class="players">${playersHtml(true)}</div>
+        <div class="prompt">${prompt} <button class="btn sm go" data-act="start">Play again</button> <button class="btn sm" data-act="lobby">Lobby</button></div>
+      </div>
+    </div>`;
+    if ($('results').innerHTML !== html) $('results').innerHTML = html;
+  }
+  const corner = `<div class="qr">${qr}</div><div>Join in<b>${esc(room.room)}</b></div>`;
+  if ($('corner').innerHTML !== corner) $('corner').innerHTML = corner;
+}
+
+document.addEventListener('click', e => {
+  sfx.init(); $('sound').classList.add('hidden');
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'start') beginCountdown();
+  if (act === 'lobby') toLobby();
+});
+function toLobby() { sfx.stopMusic(); G = newGame(); mode = 'lobby'; ready.clear(); dirty = true; renderOverlays(); }
+addEventListener('keydown', e => {
+  sfx.init(); $('sound').classList.add('hidden');
+  if (e.key === 'f' || e.key === 'F') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }
+  else if (e.key === 'm' || e.key === 'M') sfx.setMuted(!sfx.muted);
+  else if (e.key === 'Escape') toLobby();
+  else if ((e.key === ' ' || e.key === 'Enter') && (mode === 'lobby' || G.phase === 'over')) beginCountdown();
+});
+
+// ---------- telling the phones how they are doing ----------
+// One broadcast carries every seat's numbers, so the relay sees ~6 messages a second however many play.
+let dirty = true, lastSent = 0;
+function snapshot() {
+  const phase = mode === 'play' ? G.phase : mode;
+  const p = {};
+  for (const s of SEATS) {
+    if (!room.seat(s)) continue;
+    const q = G.players[s], lane = G.lanes.indexOf(s);
+    p[s] = q ? [q.score, q.combo, Math.round(q.super * 100), q.stun > 0 ? 1 : 0, q.ev, q.last, lane, ready.has(s) ? 1 : 0, nameOf(s)]
+             : [0, 0, 0, 0, 0, '', -1, ready.has(s) ? 1 : 0, nameOf(s)];
+  }
+  const rank = mode === 'play' && G.phase === 'over' ? ranking(G).map(([s]) => s) : null;
+  return { t: 's', ph: phase, w: G.wave, h: G.hearts, cd: Math.ceil(mode === 'countdown' ? countdown : G.phase === 'break' ? G.timer : 0), n: present().length, p, rank };
+}
+function sync(now) {
+  if ((dirty && now - lastSent > 80) || now - lastSent > 300) { room.all(snapshot()); lastSent = now; dirty = false; }
+}
+
+// ---------- the loop ----------
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+}
+addEventListener('resize', resize); resize();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const here = present();
+
+  // seats whose phone has been gone a while are freed in the lobby, so the list shows who is really here
+  for (const s of SEATS) {
+    if (room.seat(s) && !live(s)) { offSince[s] ??= now; if ((mode === 'lobby' || G.phase === 'over') && now - offSince[s] > 15000) { room.free(s); ready.delete(s); delete offSince[s]; renderOverlays(); } }
+    else delete offSince[s];
+  }
+
+  if (mode === 'lobby') {
+    // stand everyone who has joined on the wall while they wait
+    G.lanes = here; for (const s of here) addPlayer(G, s, nameOf(s));
+    G.t += dt;
+  } else if (mode === 'countdown') {
+    const before = Math.ceil(countdown);
+    countdown -= dt; G.t += dt;
+    if (Math.ceil(countdown) !== before) { dirty = true; if (countdown > 0) sfx.beep(false); }
+    banner(countdown > 0 ? String(Math.ceil(countdown)) : 'GO!', 0.6);
+    if (countdown <= 0) {
+      if (!present().length) { toLobby(); }
+      else { startGame(G, present()); for (const s of G.lanes) G.players[s].name = nameOf(s); mode = 'play'; sfx.beep(true); sfx.startMusic(120); dirty = true; renderOverlays(); }
+    }
+  } else if (mode === 'play') {
+    const before = G.phase, ev = G.lanes.map(s => G.players[s]?.stun > 0);
+    step(G, dt, live);
+    if (G.lanes.some((s, i) => (G.players[s].stun > 0) !== ev[i])) dirty = true;
+    if (breakOver(G)) { const next = present(); if (next.length) startWave(G, next); }
+    if (G.phase !== before) { dirty = true; renderOverlays(); }
+    drainLog();
+  }
+
+  tickFx(dt);
+  Lo = drawField(ctx, G, { W: cv.width, H: cv.height, live: s => mode !== 'play' || live(s), name: nameOf });
+  if (mode === 'lobby' || G.phase === 'over') drainLog();
+  const b = $('banner'); b.style.opacity = now < bannerUntil ? 1 : 0;
+  sync(now);
+  requestAnimationFrame(frame);
+}
+if (param('debug') != null) window.frolic = { get G() { return G; }, get mode() { return mode; }, need }; // for tests and bots
+renderOverlays();
+requestAnimationFrame(frame);
+setInterval(renderOverlays, 1000); // ready ticks and reconnecting labels
+</script>
+</body>
+</html>

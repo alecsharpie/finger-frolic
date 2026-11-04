@@ -1,0 +1,36 @@
+/* Shared look for the TV and the phones. */
+:root {
+  --bg: #1a1033;
+  --bg-2: #241848;
+  --panel: #2d1f5a;
+  --line: #4a3a86;
+  --ink: #f6f2ff;
+  --ink-2: #b9addf;
+  --accent: #ffd23f;
+  --accent-ink: #2a1d00;
+  --good: #5be37d;
+  --bad: #ff6b7f;
+  --radius: 16px;
+  --tap: 64px;
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+body { -webkit-tap-highlight-color: transparent; }
+button, input { font: inherit; color: inherit; }
+.hidden { display: none !important; }
+
+.btn {
+  min-height: var(--tap); padding: 0 22px; border-radius: var(--radius);
+  border: 2px solid var(--line); background: var(--panel); font-size: 20px; font-weight: 800;
+  cursor: pointer; touch-action: manipulation; user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn.go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.sm { min-height: 44px; font-size: 16px; padding: 0 16px; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); font-size: 15px; color: var(--ink-2); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+.dot.on { background: var(--good); }
