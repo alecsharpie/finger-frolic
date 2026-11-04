@@ -51,8 +51,11 @@ npm start        # serves on the home network + runs the relay locally (needs `n
 npm test         # rules tests + relay tests
 ```
 
-`dev.html` shows the TV and three phones side by side in one tab, no relay needed (`?players=1..4`). Click a phone
-frame and use the arrow keys (space = tap).
+**Dev mode:** `dev.html` (also linked from the bottom of the TV lobby, and live at
+https://www.alecsharpie.me/finger-frolic/dev.html) shows the TV and 1–8 phones side by side in one tab, talking
+over BroadcastChannel, so it needs no relay. Pick the phone count at the top. Click a phone and use the arrow keys
+(space = tap), or drag with the mouse. Tick **bot** on any phone (or **all bots**) to have it play itself; bot skill
+sets how often bots swipe the wrong way.
 
 ## Deploy
 

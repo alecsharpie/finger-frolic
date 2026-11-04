@@ -199,6 +199,7 @@ function renderOverlays() {
         <div class="prompt">${prompt} ${here.length ? '<button class="btn sm go" data-act="start">Start now</button>' : ''}</div>
       </div>
       ${HOW}
+      ${self === top ? '<a href="dev.html" style="grid-column:1/-1;justify-self:end;color:var(--ink-2);font-size:14px">dev mode: TV and phones in one tab →</a>' : ''}
     </div>`;
     if ($('lobby').innerHTML !== html) $('lobby').innerHTML = html;
   }

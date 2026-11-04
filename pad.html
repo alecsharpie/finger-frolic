@@ -172,6 +172,7 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap' };
 addEventListener('keydown', e => { if (net && KEY[e.key] && !e.repeat && !e.target.closest('input')) { e.preventDefault(); send(KEY[e.key]); } });
 if (param('auto') != null) start();
+window.frolicPad = { send, get seat() { return seat; } }; // dev.html drives this for bots
 </script>
 </body>
 </html>

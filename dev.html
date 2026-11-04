@@ -6,20 +6,109 @@
 <title>Finger Frolic · Dev</title>
 <link rel="stylesheet" href="shared/theme.css">
 <style>
-  body { display: grid; grid-template-columns: 1fr repeat(var(--n), 260px); gap: 8px; padding: 8px; height: 100vh; }
-  iframe { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  /* The TV and N phones in one tab over BroadcastChannel (?net=local): no relay, no real phones. */
+  body { display: flex; flex-direction: column; height: 100vh; padding: 10px; gap: 10px; overflow: hidden; }
+  .bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 15px; color: var(--ink-2); }
+  .bar b { color: var(--ink); font-size: 18px; }
+  .bar select, .bar label { font-size: 15px; }
+  .bar select { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .tv { min-width: 0; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+  .tv .screen { position: relative; border: 6px solid #0c0818; border-radius: 12px; overflow: hidden; background: #000; }
+  .tv iframe { position: absolute; top: 0; left: 0; width: 1600px; height: 900px; border: 0; transform-origin: 0 0; }
+  .phones { display: grid; gap: 10px; align-content: start; overflow: auto; }
+  .phone { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .phone .shell { position: relative; border: 5px solid #0c0818; border-radius: 22px; overflow: hidden; background: var(--bg); outline: 3px solid transparent; }
+  .phone .shell.focus { outline-color: var(--accent); }
+  .phone iframe { position: absolute; top: 0; left: 0; width: 390px; height: 780px; border: 0; transform-origin: 0 0; }
+  .phone .ctl { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-2); }
 </style>
 </head>
 <body>
-<!-- The TV and N phones over BroadcastChannel (?net=local): no relay, no phones. ?players=3 sets N (1-4).
-     Click a phone frame, then use the arrow keys (space = tap). -->
+<div class="bar">
+  <b>Finger Frolic · dev</b>
+  <label>Phones <select id="n"></select></label>
+  <label><input type="checkbox" id="allbots"> all bots</label>
+  <label>Bot skill <select id="skill"><option value="0.98">sharp</option><option value="0.9" selected>decent</option><option value="0.75">sloppy</option></select></label>
+  <span>Click a phone, then arrow keys to swipe, space to tap. Drag with the mouse works too.</span>
+  <a href="index.html" style="color:var(--ink-2);margin-left:auto">real TV page →</a>
+</div>
+<div class="main">
+  <div class="tv"><div class="screen" id="tv"></div></div>
+  <div class="phones" id="phones"></div>
+</div>
 <script>
-  const n = Math.max(1, Math.min(4, +new URLSearchParams(location.search).get('players') || 3)), room = 'DEVXX';
-  document.body.style.setProperty('--n', n);
-  const frame = src => { const f = document.createElement('iframe'); f.src = src; document.body.appendChild(f); };
-  frame(`index.html?net=local&room=${room}`);
-  const names = ['Ada', 'Bo', 'Cy', 'Di'];
-  for (let i = 0; i < n; i++) frame(`pad.html?net=local&room=${room}&cid=dev-${i}&name=${names[i]}&auto`);
+const q = new URLSearchParams(location.search);
+const N = Math.max(1, Math.min(8, +q.get('players') || 3));
+const room = 'DEVXX'; // a valid code (no I, O, 0 or 1), shared by the TV and the phones over BroadcastChannel
+const NAMES = ['Ada', 'Bo', 'Cy', 'Di', 'Ed', 'Flo', 'Gus', 'Hal'];
+const $ = id => document.getElementById(id);
+
+for (let i = 1; i <= 8; i++) $('n').add(new Option(i, i, i === N, i === N));
+$('n').onchange = () => { q.set('players', $('n').value); location.search = q; };
+
+const tv = document.createElement('iframe');
+tv.src = `index.html?net=local&room=${room}&debug`;
+$('tv').appendChild(tv);
+
+const phones = [];
+for (let i = 0; i < N; i++) {
+  const wrap = document.createElement('div'); wrap.className = 'phone';
+  wrap.innerHTML = `<div class="shell"><iframe src="pad.html?net=local&room=${room}&cid=dev-${i}&name=${NAMES[i]}&auto"></iframe></div>
+    <div class="ctl"><span>${NAMES[i]}</span><label><input type="checkbox" class="bot"> bot</label></div>`;
+  $('phones').appendChild(wrap);
+  const f = wrap.querySelector('iframe'), bot = wrap.querySelector('.bot'), shell = wrap.querySelector('.shell');
+  f.addEventListener('load', () => {
+    const w = f.contentWindow;
+    w.addEventListener('focus', () => document.querySelectorAll('.shell').forEach(s => s.classList.toggle('focus', s === shell)));
+  });
+  phones.push({ f, bot, shell });
+}
+$('allbots').onchange = () => phones.forEach(p => { p.bot.checked = $('allbots').checked; });
+
+// Scale the TV (rendered at 1600×900) and the phones (390×780) to fit, so both look like the real thing.
+function fit() {
+  const main = document.querySelector('.main'), H = main.clientHeight, W = main.clientWidth;
+  // phones get at most ~45% of the width; rows and columns chosen so they stay as big as possible
+  let best = null;
+  for (let cols = 1; cols <= N; cols++) {
+    const rows = Math.ceil(N / cols);
+    const ph = Math.min((H - (rows - 1) * 10) / rows - 26, 780 * 0.75, ((W * 0.45 - (cols - 1) * 10) / cols - 10) * 2);
+    if (!best || ph > best.ph) best = { cols, ph };
+  }
+  const { cols, ph } = best, ps = ph / 780;
+  $('phones').style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  for (const p of phones) { p.shell.style.width = 390 * ps + 'px'; p.shell.style.height = ph + 'px'; p.f.style.transform = `scale(${ps})`; }
+  // the TV keeps 16:9 inside whatever space is left
+  const box = document.querySelector('.tv'), tw = Math.min(box.clientWidth - 12, (box.clientHeight - 12) * 16 / 9);
+  $('tv').style.width = tw + 'px'; $('tv').style.height = tw * 9 / 16 + 'px';
+  tv.style.transform = `scale(${tw / 1600})`;
+}
+addEventListener('resize', fit); fit(); requestAnimationFrame(fit);
+
+// Bots: read the TV's game state and swipe what their lane needs, with a human-ish delay and the odd mistake.
+const DIRS = ['u', 'r', 'd', 'l'], wait = new Map();
+setInterval(() => {
+  const game = tv.contentWindow?.frolic; if (!game) return;
+  const { G, mode, need } = game, now = performance.now(), skill = +$('skill').value;
+  phones.forEach((p, i) => {
+    const pad = p.f.contentWindow?.frolicPad;
+    if (!p.bot.checked || !pad || !pad.seat) return;
+    if ((now - (wait.get(i) || 0)) < 0) return;
+    const seat = pad.seat;
+    if (mode === 'lobby' || G.phase === 'over') { pad.send('u'); wait.set(i, now + 1500); return; } // ready up (repeats are ignored)
+    if (mode !== 'play' || G.phase !== 'wave') return;
+    const lane = G.lanes.indexOf(seat), me = G.players[seat];
+    if (lane < 0 || me.stun > 0) return;
+    if (me.super >= 1) { pad.send('tap'); wait.set(i, now + 400); return; }
+    let best = null;
+    for (const e of G.enemies) if (e.y > 0.15 && need(e, lane) && (!best || e.y > best.y)) best = e;
+    if (!best) return;
+    const d = need(best, lane);
+    pad.send(Math.random() < skill ? d : DIRS[(DIRS.indexOf(d) + 1 + Math.floor(Math.random() * 3)) % 4]);
+    wait.set(i, now + 220 + Math.random() * 380);
+  });
+}, 50);
 </script>
 </body>
 </html>
