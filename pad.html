@@ -5,83 +5,88 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#1a1033">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Finger Frolic · Pad</title>
+<title>Finger Frolic</title>
 <link rel="stylesheet" href="shared/theme.css">
 <style>
   html, body { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  body { --c: var(--accent); display: flex; flex-direction: column; padding: calc(10px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 60%, color-mix(in srgb, var(--c) 28%, var(--bg)) 0%, var(--bg) 70%); transition: background .3s; }
+  body { --c: var(--accent); display: flex; flex-direction: column; padding: calc(10px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(color-mix(in srgb, var(--c) 18%, var(--bg)), var(--bg) 60%); transition: background .3s; }
   body.stun { --c: #8a8a9a; }
-  .top { display: flex; align-items: center; gap: 10px; font-size: 18px; white-space: nowrap; min-height: 34px; }
-  .top .me { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 20px; overflow: hidden; text-overflow: ellipsis; }
-  .top .blob { width: 20px; height: 20px; border-radius: 50%; background: var(--c); flex: none; }
+  .top { display: flex; align-items: center; gap: 8px; font-size: 18px; white-space: nowrap; min-height: 40px; }
+  .top .me { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 20px; overflow: hidden; text-overflow: ellipsis; }
   .top .sp { flex: 1; }
-  .top .hearts { font-size: 16px; letter-spacing: -2px; }
-  .stats { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
-  .stats .score { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; }
-  .stats .combo { font-size: 22px; font-weight: 900; color: var(--c); }
-  .zone { flex: 1; position: relative; display: grid; place-items: center; margin: 12px 0; border-radius: 28px; border: 3px dashed color-mix(in srgb, var(--c) 60%, transparent); text-align: center; }
-  .zone .big { font-size: 34px; font-weight: 900; line-height: 1.15; padding: 0 12px; }
-  .zone .big small { display: block; font-size: 18px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
-  .zone .num { font-size: 140px; font-weight: 900; }
-  .flash { position: absolute; left: 50%; top: 50%; font-size: 150px; line-height: 1; color: var(--c); pointer-events: none; opacity: 0; transform: translate(-50%, -50%); }
+  .top .hearts { display: flex; gap: 2px; }
+  .stats { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; min-height: 40px; }
+  .zone { flex: 1; position: relative; display: grid; place-items: center; margin: 12px 0; text-align: center;
+    background: color-mix(in srgb, var(--c) 8%, transparent); box-shadow: inset 0 0 0 4px #140b26, inset 0 0 0 7px color-mix(in srgb, var(--c) 55%, transparent); }
+  .scr { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 16px; }
+  .scr .sub { color: var(--ink-2); font-size: 18px; line-height: 1.35; max-width: 300px; }
+  .scr .sub b { color: var(--ink); }
+  .scr .row { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 18px; }
+  .flash { position: absolute; left: 50%; top: 50%; pointer-events: none; opacity: 0; transform: translate(-50%, -50%); }
   .flash.go { animation: fl .32s ease-out; }
-  @keyframes fl { from { opacity: .95; transform: translate(-50%, -50%) scale(1.15); } to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.8); } }
-  .meter { height: 22px; border-radius: 11px; background: rgba(0,0,0,.35); overflow: hidden; position: relative; }
-  .meter i { position: absolute; inset: 0 auto 0 0; background: var(--c); border-radius: 11px; transition: width .15s; }
-  .meter b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 900; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 2px #000; }
-  .meter.full i { animation: pulse .5s infinite alternate; }
+  @keyframes fl { from { opacity: .95; transform: translate(-50%, -50%) scale(1.1); } to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.85); } }
+  .meter { height: 26px; background: #140b26; position: relative; box-shadow: 0 0 0 3px #140b26; }
+  .meter i { position: absolute; inset: 3px auto 3px 3px; background: var(--c); transition: width .15s; max-width: calc(100% - 6px); }
+  .meter b { position: absolute; inset: 0; display: grid; place-items: center; }
+  .meter.full i { animation: pulse .5s steps(2) infinite; }
   @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.6); } }
-  .form { margin: auto 0; display: flex; flex-direction: column; gap: 14px; text-align: center; }
-  .form h1 { margin: 0 0 6px; font-size: 40px; }
-  .form h1 span { color: var(--accent); }
-  .form input { font-size: 26px; padding: 14px; border-radius: var(--radius); border: 2px solid var(--line); background: var(--bg-2); text-align: center; width: 100%; touch-action: manipulation; user-select: text; -webkit-user-select: text; }
-  .form input.code { letter-spacing: .25em; text-transform: uppercase; font-weight: 900; }
-  .form .btn { min-height: 72px; font-size: 24px; }
-  .note { color: var(--ink-2); font-size: 15px; }
+  .tbar { height: 10px; background: #140b26; margin-top: 6px; position: relative; }
+  .tbar i { position: absolute; inset: 2px auto 2px 2px; width: 0; max-width: calc(100% - 4px); background: #ff8a3c; transition: width .2s; }
+  body.frenzy .tbar i { background: #fff; }
+  .form { margin: auto 0; display: flex; flex-direction: column; gap: 16px; text-align: center; align-items: stretch; }
+  .form .logo { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .form input { font-size: 26px; padding: 14px; border: 0; border-radius: 0; background: var(--bg-2); color: var(--ink); text-align: center; width: 100%; box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #0e0820; touch-action: manipulation; user-select: text; -webkit-user-select: text; }
+  .form input.code { letter-spacing: .25em; text-transform: uppercase; }
+  .form .btn { min-height: 72px; font-size: 24px; justify-content: center; }
+  .btn { border: 0; border-radius: 0; display: inline-flex; align-items: center; gap: 10px; box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #5a4a9a, 4px 4px 0 0 #0b0618; }
+  .btn.go { box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #fff3a0, 4px 4px 0 0 #0b0618; }
+  .note { color: var(--ink-2); font-size: 16px; }
   body.frenzy { animation: rainbow 1.2s linear infinite; }
   @keyframes rainbow { from { filter: hue-rotate(0deg) saturate(1.3); } to { filter: hue-rotate(360deg) saturate(1.3); } }
-  body.ice .zone { background: rgba(170, 225, 255, .14); border-color: #bfe8ff; }
-  .zone.pow { animation: pow .25s ease-out; }
-  @keyframes pow { from { background: color-mix(in srgb, var(--c) 55%, transparent); transform: scale(1.03); } to { background: transparent; transform: none; } }
-  .zone.ouch { animation: ouch .4s; }
+  body.ice .zone { background: rgba(170, 225, 255, .14); }
+  .zone.pow { animation: pow .25s steps(3); }
+  @keyframes pow { from { background: color-mix(in srgb, var(--c) 55%, transparent); } to { background: transparent; } }
+  .zone.ouch { animation: ouch .4s steps(4); }
   @keyframes ouch { 0% { background: rgba(255, 50, 80, .5); transform: translateX(-12px); } 30% { transform: translateX(10px); } 60% { transform: translateX(-6px); } 100% { background: transparent; transform: none; } }
-  .shout { position: absolute; left: 0; right: 0; top: 18%; text-align: center; font-size: 38px; font-weight: 900; pointer-events: none; opacity: 0; text-shadow: 0 4px 0 rgba(0,0,0,.4); }
-  .shout.go { animation: shout 1.3s ease-out; }
-  @keyframes shout { 0% { opacity: 0; transform: scale(.5); } 12% { opacity: 1; transform: scale(1.2); } 25% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
-  .tbar { height: 8px; border-radius: 4px; background: rgba(0,0,0,.35); overflow: hidden; margin-top: 8px; }
-  .tbar i { display: block; height: 100%; width: 0; background: #ff8a3c; transition: width .2s; }
-  body.frenzy .tbar i { background: #fff; }
+  .shout { position: absolute; left: 0; right: 0; top: 14%; display: flex; justify-content: center; pointer-events: none; opacity: 0; }
+  .shout.go { animation: shout 1.3s steps(12); }
+  @keyframes shout { 0% { opacity: 0; transform: scale(.5); } 12% { opacity: 1; transform: scale(1.15); } 25% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
   #ink { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5; }
-  body.draw .zone { border-style: solid; border-color: #b98cff; background: rgba(138, 77, 255, .14); }
+  body.draw .zone { background: rgba(138, 77, 255, .16); box-shadow: inset 0 0 0 4px #140b26, inset 0 0 0 7px #b98cff; }
   .shake { animation: shake .3s; }
-  @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-10px) rotate(-2deg); } 75% { transform: translateX(10px) rotate(2deg); } }
+  @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
 </style>
 </head>
 <body>
 <canvas id="ink"></canvas>
 <div id="join" class="form">
-  <h1>Finger <span>Frolic</span></h1>
+  <div class="logo" id="logo"></div>
   <input id="name" maxlength="12" placeholder="Your name" autocomplete="nickname" enterkeyhint="go">
   <input id="room" class="code" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters">
   <button id="go" class="btn go">Join the wall</button>
   <div class="note">The code is on the TV.</div>
 </div>
 <div id="pad" class="hidden" style="display:contents">
-  <div class="top"><span class="me"><span class="blob"></span><span id="me"></span></span><span class="sp"></span><span id="wave"></span><span class="hearts" id="hearts"></span></div>
-  <div class="stats"><span class="score" id="score">0</span><span class="combo" id="combo"></span></div>
+  <div class="top"><span class="me" id="me"></span><span class="sp"></span><span id="wave"></span><span class="hearts" id="hearts"></span></div>
+  <div class="stats"><span id="score"></span><span id="combo"></span></div>
   <div class="tbar" title="team frenzy"><i id="tfill"></i></div>
-  <div class="zone" id="zone"><div id="msg" class="big"></div><div class="flash" id="flash"></div><div class="shout" id="shout"></div></div>
-  <div class="meter" id="meter"><i id="fill" style="width:0"></i><b id="mtext">SUPER</b></div>
+  <div class="zone" id="zone"><div id="msg"></div><div class="flash" id="flash"></div><div class="shout" id="shout"></div></div>
+  <div class="meter" id="meter"><i id="fill" style="width:0"></i><b id="mtext"></b></div>
 </div>
 <script type="module">
 import { joinRoom, param, load, save } from './shared/net.js';
 import { seatColor } from './draw.js';
 import { classify, SHAPES } from './shared/shapes.js';
+import { pic, ptext } from './shared/ui.js';
+import { DIFF_ICON, AWARD_ICON } from './icons.js';
+import { DIFFS } from './game.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const buzz = p => { try { navigator.vibrate?.(p); } catch (e) {} };
 
+$('logo').innerHTML = ptext('FINGER', 48, 'white') + ptext('FROLIC', 48, 'gold');
 $('name').value = param('name') || load('frolic-name', '');
 $('room').value = (param('room') || '').toUpperCase();
 if (param('room')) $('room').classList.add('hidden');
@@ -106,58 +111,63 @@ $('name').addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
 
 // ---------- what the phone shows ----------
 const mine = () => (S && seat && S.p[seat]) || null;
+// one screen: a picture, a heading in the pixel font, a sentence
+const scr = (icon, title, sub = '', color = 'white') => `<div class="scr">${icon || ''}${title ? ptext(title, 46, color) : ''}${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+const set = (id, html) => { if ($(id).innerHTML !== html) $(id).innerHTML = html; };
 function render() {
   if (!net) return;
-  const me = mine(), ph = S?.ph;
-  $('me').textContent = me ? me[8] : ($('name').value || 'You');
-  $('wave').textContent = S && S.w ? `Wave ${S.w}` : '';
-  $('hearts').textContent = S && S.w ? '❤️'.repeat(Math.max(0, S.h)) : '';
-  $('score').textContent = me ? me[0].toLocaleString() : '0';
-  $('combo').textContent = me && me[1] >= 2 ? `${me[1]}× combo` : '';
+  const me = mine(), ph = S?.ph, col = seat ? seatColor(seat) : '#ffd23f';
+  set('me', `${pic('wizard:' + col, 52)}${esc(me ? me[8] : ($('name').value || 'You'))}`);
+  set('wave', S && S.w ? ptext('WAVE ' + S.w, 22) : '');
+  set('hearts', S && S.w ? Array.from({ length: Math.max(0, Math.min(8, S.h)) }, () => pic('heart', 22)).join('') : '');
+  set('score', me ? ptext(me[0].toLocaleString('en-US'), 36, 'white') : '');
+  set('combo', me && me[1] >= 2 ? ptext(me[1] + 'X COMBO', 26, me[1] >= 10 ? 'flame' : col) : '');
   const sup = me ? me[2] : 0;
-  $('fill').style.width = sup + '%';
+  $('fill').style.width = `calc(${sup}% - 6px)`;
   $('meter').classList.toggle('full', sup >= 100);
-  $('mtext').textContent = sup >= 100 ? 'TAP FOR SUPER!' : 'SUPER';
+  set('mtext', ptext(sup >= 100 ? 'TAP FOR SUPER!' : 'SUPER', 20));
   document.body.classList.toggle('stun', !!(me && me[3]));
   document.body.classList.toggle('draw', !!(me && me[11] && ph === 'wave'));
   document.body.classList.toggle('frenzy', !!(S && S.fr > 0 && ph === 'wave'));
   document.body.classList.toggle('ice', !!(S && S.ice > 0 && ph === 'wave'));
-  $('tfill').style.width = (S ? (S.fr > 0 ? S.fr / 8 * 100 : S.fz) : 0) + '%';
+  $('tfill').style.width = `calc(${S ? (S.fr > 0 ? S.fr / 8 * 100 : S.fz) : 0}% - 4px)`;
 
+  const wiz = pic('wizard:' + col, 120);
   let msg;
-  if (status === 'full') msg = 'This game is full<small>8 players max. Hang on and try again later.</small>';
-  else if (status !== 'open' || !seat) msg = `Connecting…<small>${status === 'waiting' ? 'looking for the TV' : ''}</small>`;
-  else if (!S) msg = 'Connected!';
+  if (status === 'full') msg = scr(pic('skull', 80), 'GAME FULL', 'Eight wizards is the most. Try again in a bit.');
+  else if (status !== 'open' || !seat) msg = scr(wiz, 'CONNECTING', status === 'waiting' ? 'Looking for the TV…' : '');
+  else if (!S) msg = scr(wiz, 'HELLO!');
   else if (ph === 'lobby' || ph === 'over') {
     let head = '';
     if (ph === 'over' && S.rank) {
-      const i = S.rank.indexOf(seat);
-      const aw = me[10];
-      head = i >= 0 ? `<div style="font-size:60px">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</div><div>${me[0].toLocaleString()} points</div>
-        ${aw ? `<div style="font-size:22px;margin:10px 0 18px;color:var(--c)">${aw[0]} ${esc(aw[1])}<small style="margin-top:2px">${esc(aw[2])}</small></div>` : ''}` : '';
+      const i = S.rank.indexOf(seat), aw = me[10];
+      head = i >= 0 ? `${i < 3 ? pic('medal' + (i + 1), 96) : ptext('#' + (i + 1), 60)}${ptext(me[0].toLocaleString('en-US') + ' PTS', 34, 'gold')}
+        ${aw ? `<div class="row">${pic(AWARD_ICON[aw[0]] || 'brick', 30)} <b>${esc(aw[1])}</b></div><div class="sub" style="margin-top:-10px">${esc(aw[2])}</div>` : ''}` : '';
     }
+    const n = Object.values(S.p).filter(p => p[7]).length;
+    const diff = S.diff && DIFFS[S.diff] ? `<div class="row" style="margin-top:10px">${pic('arrowL', 16)} ${pic(DIFF_ICON[S.diff], 28)} ${DIFFS[S.diff].label} ${pic('arrowR', 16)}</div><div class="sub" style="margin-top:-8px;font-size:15px">swipe left or right to change</div>` : '';
     msg = me && me[7]
-      ? `${head}✓ Ready!<small>waiting for the others (${Object.values(S.p).filter(p => p[7]).length}/${S.n})</small>`
-      : `${head}Swipe <span style="color:var(--c)">UP</span><br>when you're ready<small>${ph === 'over' ? 'to play again' : 'everyone swipes up to start'}</small>`;
-    if (S.diff) msg += `<small style="margin-top:22px">${esc(S.diff)}<br>swipe ← → to change difficulty</small>`;
+      ? `<div class="scr">${head || wiz}${ptext('READY', 46, 'green')}<div class="sub">Waiting for the others, ${n} of ${S.n}</div>${diff}</div>`
+      : `<div class="scr">${head || wiz}${pic('arrowU', 54)}${ptext('SWIPE UP', 46)}<div class="sub">${ph === 'over' ? 'to play again' : 'when you\'re ready'}</div>${diff}</div>`;
   }
-  else if (ph === 'countdown') msg = `<div class="num">${S.cd || 'GO'}</div>`;
-  else if (me && me[6] < 0) msg = `You're in!<small>${ph === 'break' ? 'joining the wall now' : 'you join at the next wave, get ready'}</small>`;
-  else if (me && me[3]) msg = '💫 Dizzy!<small>wrong way, hold on</small>';
-  else if (ph === 'break') msg = `Wave cleared!<small>next one in ${S.cd}…</small>`;
-  else if (me && me[11]) msg = '✏️ DRAW IT!<small>draw the purple rune\'s shape on the TV, in one stroke</small>';
-  else if (sup >= 100) msg = '⚡ TAP! ⚡<small>for a super that clears your lane</small>';
-  else if (me && me[9] === 1) msg = '🤝 Helping!<small>your lane is clear, so you are swiping your neighbour\'s monster</small>';
-  else if (me && me[9] === 2) msg = 'Lane clear 😎<small>get ready… you\'ll help a neighbour when theirs gets close</small>';
-  else msg = S.fr > 0 ? '🔥 FRENZY! 🔥<small>double points, go go go</small>' : 'Swipe!<small>swipe the arrows over the monster in your lane to cast</small>';
-  if ($('msg').innerHTML !== msg) $('msg').innerHTML = msg;
+  else if (ph === 'countdown') msg = ptext(S.cd ? String(S.cd) : 'GO!', 160, S.cd ? 'white' : 'gold');
+  else if (me && me[6] < 0) msg = scr(wiz, 'YOU\'RE IN', ph === 'break' ? 'Taking your place on the wall…' : 'You join at the next wave. Watch the TV and get ready.');
+  else if (me && me[3]) msg = scr(pic('stars', 90), 'DIZZY', 'Wrong spell. Shake it off…', 'gold');
+  else if (ph === 'break') msg = scr(pic('sparkle', 90), 'WAVE CLEAR', `Next wave in ${S.cd}…`, 'gold');
+  else if (me && me[11]) msg = scr(pic('pencil', 90), 'DRAW IT', 'Draw the purple rune\'s shape, in one stroke.', 'violet');
+  else if (sup >= 100) msg = scr(pic('bolt', 90), 'TAP!', 'Your super is charged. Tap to clear your lane.', 'gold');
+  else if (me && me[9] === 1) msg = scr(pic('shield', 90), 'HELPING', 'Your lane is clear, so your spells fly next door.');
+  else if (me && me[9] === 2) msg = scr(wiz, 'ALL CLEAR', 'Nothing in your lane. Be ready to help.');
+  else if (S.fr > 0) msg = scr(pic('flame', 90), 'FRENZY!', 'Double points. Go, go, go!', 'flame');
+  else msg = scr(pic('wand', 90), 'SWIPE!', 'Match the arrows over the monster in your lane.');
+  set('msg', msg);
 }
 
 // buzz and flash for what happened on the TV (my ev counter moves on each event; last says which)
-const TEAM = { frenzy: ['🔥 FRENZY!', [60, 40, 60, 40, 200]], freeze: ['❄️ FREEZE!', [30, 30, 30]], heal: ['❤️ +1 HEART', [40, 40, 120]],
-  storm: ['⚡ LIGHTNING!', [200]], perfect: ['✨ PERFECT!', [30, 30, 30, 30, 120]], boss: ['👑 BOSS DOWN!', [100, 50, 300]] };
-function shout(text, color = '#fff') {
-  const el = $('shout'); el.textContent = text; el.style.color = color;
+const TEAM = { frenzy: ['FRENZY!', 'flame', [60, 40, 60, 40, 200]], freeze: ['FREEZE!', 'ice', [30, 30, 30]], heal: ['+1 HEART', 'red', [40, 40, 120]],
+  storm: ['LIGHTNING!', 'gold', [200]], perfect: ['PERFECT!', 'gold', [30, 30, 30, 30, 120]], boss: ['BOSS DOWN!', 'gold', [100, 50, 300]] };
+function shout(text, color = 'white') {
+  const el = $('shout'); el.innerHTML = ptext(text, 44, color);
   el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
 }
 function zoneFx(cls) { const z = $('zone'); z.classList.remove('pow', 'ouch'); void z.offsetWidth; z.classList.add(cls); }
@@ -168,22 +178,22 @@ function feel() {
     buzz({ hit: 12, assist: 12, kill: [20, 30, 25], miss: [70, 40, 70], super: [40, 30, 160], ouch: 220 }[b[5]] || 10);
     if (b[5] === 'kill') zoneFx('pow');
     if (b[5] === 'ouch') zoneFx('ouch');
-    if (b[5] === 'super') shout('💥 SUPER!');
-    if (b[1] >= 10 && b[1] % 10 === 0 && b[1] !== a[1]) shout(`${b[1]} COMBO! 🔥`, 'var(--c)');
+    if (b[5] === 'super') shout('SUPER!', 'gold');
+    if (b[1] >= 10 && b[1] % 10 === 0 && b[1] !== a[1]) shout(`${b[1]} COMBO!`, 'flame');
   } else if (prev && S.h < prev.h) { buzz(60); zoneFx('ouch'); }
-  if (prev && S.tev !== prev.tev && TEAM[S.tl]) { const [t, v] = TEAM[S.tl]; shout(t); buzz(v); }
+  if (prev && S.tev !== prev.tev && TEAM[S.tl]) { const [t, c, v] = TEAM[S.tl]; shout(t, c); buzz(v); }
   if (prev && prev.ph !== S.ph && S.ph === 'wave') buzz([30, 60, 30]);
 }
 
 // ---------- swipes and drawings ----------
-const ARROW = { u: '⬆', d: '⬇', l: '⬅', r: '➡' }, OFF = { u: [0, -60], d: [0, 60], l: [-60, 0], r: [60, 0] };
+const OFF = { u: [0, -60], d: [0, 60], l: [-60, 0], r: [60, 0] };
 function send(s) {
   if (!net) return;
   net.act({ s });
   if (s === 'tap') { buzz(15); return; }
   buzz(SHAPES[s] ? [10, 20, 10] : 6);
   const f = $('flash');
-  f.textContent = ARROW[s] || SHAPES[s].icon; const o = OFF[s] || [0, -40];
+  f.innerHTML = pic('chip:' + s, 150); const o = OFF[s] || [0, -40];
   f.style.setProperty('--dx', o[0] + 'px'); f.style.setProperty('--dy', o[1] + 'px');
   f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
 }
@@ -242,7 +252,7 @@ const up = e => {
     if (c.type === 'shape') send(c.name);
     else if (c.type === 'swipe') send(c.dir);
     else if (c.type === 'tap') send('tap');
-    else { shout('🤔 try again', '#fff'); buzz([20, 40, 20]); }
+    else { shout('TRY AGAIN', 'white'); buzz([20, 40, 20]); }
     return;
   }
   if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < TAP && performance.now() - s.t < 400) send('tap');
@@ -251,7 +261,7 @@ addEventListener('pointerup', up); addEventListener('pointercancel', e => touche
 document.addEventListener('touchmove', e => { if (!e.target.closest('input')) e.preventDefault(); }, { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
 
-// keys, for testing on a laptop: arrows swipe, space taps, 1-5 draw ○ △ ✓ □ Z
+// keys, for testing on a laptop: arrows swipe, space taps, 1-5 draw circle, triangle, check, square, zigzag
 const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap', 1: 'circle', 2: 'tri', 3: 'v', 4: 'square', 5: 'zig' };
 addEventListener('keydown', e => { if (net && KEY[e.key] && !e.repeat && !e.target.closest('input')) { e.preventDefault(); send(KEY[e.key]); } });
 if (param('auto') != null) start();

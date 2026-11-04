@@ -101,6 +101,11 @@ export class Painter {
     return this;
   }
   px(x, y, m, t = 1) { this.set(x, y, m, t); return this; }
+  // hand-placed pixels: rows of characters, map[ch] = [material, tone]; '.' and ' ' are empty
+  grid(rows, map, ox = 0, oy = 0) {
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { const m = map[ch]; if (m) this.set(ox + x, oy + y, m[0], m[1]); }));
+    return this;
+  }
   // A dark 1-px rim around the silhouette. Selective: where the rim touches the lit upper-left of a form it takes
   // that material's deep tone instead of ink, so sprites look painted rather than stickered.
   outline() {

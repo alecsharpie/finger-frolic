@@ -16,10 +16,10 @@ export const isShapeToken = t => SHAPE_KEYS.includes(t);
 //   speed: monster speed ×, ramp: extra speed per wave, size: monsters per wave ×, gap: time between spawns ×,
 //   early: new monster kinds arrive this many waves sooner, shapesFrom: wave when brutes start ending in a shape.
 export const DIFFS = {
-  easy:      { label: 'Easy',      icon: '🌱', hearts: 6, speed: 0.85, ramp: 0.06, size: 0.85, gap: 1.15, knock: 0.03,  stun: 0.4, frenzyHits: 10, early: 0, shapesFrom: 9, shapeSet: 3 },
-  normal:    { label: 'Normal',    icon: '⚔️', hearts: 5, speed: 1.15, ramp: 0.1,  size: 1.15, gap: 0.85, knock: 0.022, stun: 0.6, frenzyHits: 14, early: 0, shapesFrom: 7, shapeSet: 5 },
-  hard:      { label: 'Hard',      icon: '🔥', hearts: 4, speed: 1.35, ramp: 0.12, size: 1.3,  gap: 0.75, knock: 0.016, stun: 0.8, frenzyHits: 18, early: 1, shapesFrom: 5, shapeSet: 5 },
-  nightmare: { label: 'Nightmare', icon: '💀', hearts: 3, speed: 1.6,  ramp: 0.14, size: 1.5,  gap: 0.65, knock: 0.01,  stun: 1.0, frenzyHits: 22, early: 2, shapesFrom: 3, shapeSet: 5 },
+  easy:      { label: 'Easy',      hearts: 6, speed: 0.85, ramp: 0.06, size: 0.85, gap: 1.15, knock: 0.03,  stun: 0.4, frenzyHits: 10, early: 0, shapesFrom: 9, shapeSet: 3 },
+  normal:    { label: 'Normal',    hearts: 5, speed: 1.15, ramp: 0.1,  size: 1.15, gap: 0.85, knock: 0.022, stun: 0.6, frenzyHits: 14, early: 0, shapesFrom: 7, shapeSet: 5 },
+  hard:      { label: 'Hard',      hearts: 4, speed: 1.35, ramp: 0.12, size: 1.3,  gap: 0.75, knock: 0.016, stun: 0.8, frenzyHits: 18, early: 1, shapesFrom: 5, shapeSet: 5 },
+  nightmare: { label: 'Nightmare', hearts: 3, speed: 1.6,  ramp: 0.14, size: 1.5,  gap: 0.65, knock: 0.01,  stun: 1.0, frenzyHits: 22, early: 2, shapesFrom: 3, shapeSet: 5 },
 };
 export const DIFF_KEYS = Object.keys(DIFFS);
 export const diffOf = G => DIFFS[G.diff] || DIFFS.normal;
@@ -45,14 +45,14 @@ export const KINDS = {
   gift:      { arrows: [2, 2], speed: 1 / 6,  points: 150, from: 2, weight: 0 }, // placed by planWave; harmless
   boss:      { arrows: [6, 6], speed: 1 / 18, points: 600, from: BOSS_EVERY, weight: 0 },
 };
-// What the TV says when a kind first shows up.
+// What the TV says when a kind first shows up (the TV shows the monster itself beside it).
 export const INTRO = {
-  brute: '🟣 Brutes: tough, 2–3 arrows',
-  gift: '🎁 Gift boxes: pop them for a power-up!',
-  golem: '🗿 Rune Golems: finish them by DRAWING the shape on your phone',
-  runner: '🟠 Runners: fast!',
-  spinner: '🌀 Spinners: the arrow turns until you hit it',
-  trickster: '🟥 Tricksters: red arrows mean swipe the OTHER way',
+  brute: 'Brutes: tough, two or three arrows',
+  gift: 'Gift boxes: pop them for a power-up',
+  golem: 'Rune golems: finish them by drawing the rune',
+  runner: 'Runners: fast!',
+  spinner: 'Spinners: the arrow turns until you hit it',
+  trickster: 'Tricksters: red arrows mean swipe the other way',
 };
 export const SPIN_EVERY = 0.75;
 export const SPACING = 0.17;      // lane lengths between monsters in one lane, so their arrows never overlap
@@ -357,13 +357,13 @@ export function ranking(G) {
 // One award each for the results screen, so everybody walks away with something.
 // Categories are handed out in order, each to the best player who has not got one yet.
 const AWARDS = [
-  ['🗡️', 'Monster Masher', 'most monsters', p => p.kills],
-  ['🔥', 'Combo Machine', 'longest combo', p => p.best],
-  ['😇', 'Guardian Angel', 'most assists', p => p.assists],
-  ['🎯', 'Sharpshooter', 'most accurate', p => p.hits >= 5 ? p.hits / (p.hits + p.misses) : 0],
-  ['🎁', 'Gift Grabber', 'most gifts popped', p => p.gifts],
-  ['💫', 'Dizzy Dancer', 'most wrong swipes', p => p.misses],
-  ['🧱', 'Brick in the Wall', 'held the line', () => 0.001],
+  ['masher', 'Monster Masher', 'most monsters', p => p.kills],
+  ['combo', 'Combo Machine', 'longest combo', p => p.best],
+  ['angel', 'Guardian Angel', 'most assists', p => p.assists],
+  ['sharp', 'Sharpshooter', 'most accurate', p => p.hits >= 5 ? p.hits / (p.hits + p.misses) : 0],
+  ['gifts', 'Gift Grabber', 'most gifts popped', p => p.gifts],
+  ['dizzy', 'Dizzy Dancer', 'most wrong spells', p => p.misses],
+  ['brick', 'Brick in the Wall', 'held the line', () => 0.001],
 ];
 export function awards(G) {
   const out = {}, rows = ranking(G);
@@ -373,6 +373,6 @@ export function awards(G) {
     const [s, p] = free.reduce((a, b) => (f(b[1]) > f(a[1]) ? b : a));
     if (f(p) > 0) out[s] = { icon, title, why };
   }
-  for (const [s] of rows) out[s] ??= { icon: '🧱', title: 'Brick in the Wall', why: 'held the line' };
+  for (const [s] of rows) out[s] ??= { icon: 'brick', title: 'Brick in the Wall', why: 'held the line' };
   return out;
 }

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Tiny5&display=swap");
 /* Shared look for the TV and the phones. */
 :root {
   --bg: #1a1033;
@@ -12,7 +13,8 @@
   --bad: #ff6b7f;
   --radius: 16px;
   --tap: 64px;
-  font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-synthesis: none; /* Tiny5 has one weight; no fake bold */
+  font-family: "Tiny5", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -34,3 +36,8 @@ button, input { font: inherit; color: inherit; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); font-size: 15px; color: var(--ink-2); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
 .dot.on { background: var(--good); }
+
+/* pixel art in HTML (shared/ui.js) */
+/* one weight everywhere: emphasis comes from colour and size, not bold */
+body, body * { font-weight: 400 !important; }
+img.px { image-rendering: pixelated; image-rendering: crisp-edges; vertical-align: middle; display: inline-block; }

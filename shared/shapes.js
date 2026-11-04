@@ -5,11 +5,11 @@
 // starting corner and both directions, so it does not matter where you start or which way round you go.
 
 export const SHAPES = {
-  circle: { label: 'circle', icon: '○' },
-  tri:    { label: 'triangle', icon: '△' },
-  square: { label: 'square', icon: '□' },
-  zig:    { label: 'zigzag', icon: 'Z' },
-  v:      { label: 'check', icon: '✓' },
+  circle: { label: 'circle' },
+  tri:    { label: 'triangle' },
+  square: { label: 'square' },
+  zig:    { label: 'zigzag' },
+  v:      { label: 'check' },
 };
 export const isShape = t => t in SHAPES;
 
@@ -72,7 +72,7 @@ function variants(name) {
     }
   } else {
     out.push(base, base.slice().reverse());
-    if (name === 'v') { // a check mark drawn the other way round: ✓ mirrored
+    if (name === 'v') { // a check mark drawn the other way round (mirrored)
       const m = base.map(([x, y]) => [-x, y]); out.push(m, m.slice().reverse());
     }
   }

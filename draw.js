@@ -7,6 +7,8 @@
 import { aim, MAX_HEARTS, FRENZY, isShapeToken } from './game.js';
 import { draw, frame, makeCanvas, mix } from './shared/pix.js';
 import { MONSTERS, wyrmHead, wyrmSeg, wizard, chip, heart, isArrow } from './sprites.js';
+import { drawText } from './shared/pixfont.js';
+import { ICONS } from './icons.js';
 
 // player colours: none of them green, so a hero never looks like a grunt
 export const COLORS = ['#ff5a8a', '#3fb6ff', '#ffd23f', '#c58bff', '#ff9a3c', '#2ee6d6', '#f2f2f2', '#ff6bd6'];
@@ -32,7 +34,8 @@ export function burst(x, y, color, n = 18, speed = 420) {
     fx.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 0.45 + Math.random() * 0.4, t: 0, color, r: 4 + Math.random() * 6, g: 900 });
   }
 }
-export function popup(x, y, text, color = '#fff', size = 34) { fx.pops.push({ x, y, text, color, size, t: 0, life: 1 }); }
+// popups are pixel-font text in the buffer: color is a font ink ('gold', 'red', …) or a hex; scale 1-3
+export function popup(x, y, text, color = 'white', scale = 1) { fx.pops.push({ x, y, text, color, scale, t: 0, life: 1 }); }
 export function bolt(x, y) {
   const pts = [[x + (Math.random() - 0.5) * 60, 0]];
   for (let k = 1; k <= 9; k++) pts.push([x + (Math.random() - 0.5) * 80 * (1 - k / 10), (y * k) / 9]);
@@ -153,7 +156,7 @@ export function drawField(ctx, G, view) {
   const b = bctx, t = G.t, L = Math.max(1, G.lanes.length), Lb = layoutBuf(bw, bh, L);
   const frozen = G.freezeT > 0, frenzy = G.frenzyT > 0;
   const Lo = { s, W, H, top: Lb.top * s, wall: Lb.wall * s, lw: Lb.lw * s, laneX: i => Lb.laneX(i) * s, yOf: y => Lb.yOf(y) * s, unit: Lb.lw * s };
-  const B = v => Math.round(v / s); // screen → buffer
+  const B = v => Math.round(v / s); // screen -> buffer
 
   // scenery (baked)
   const key = [bw, bh, G.lanes.join(), frozen].join('|');
@@ -235,13 +238,20 @@ export function drawField(ctx, G, view) {
     b.fillStyle = p.color; b.fillRect(B(p.x) - (r >> 1), B(p.y) - (r >> 1), r, r);
   }
 
-  // HUD in pixels: hearts and the team frenzy bar
+  // popups, in the pixel font
+  for (const p of fx.pops) drawText(b, p.text, B(p.x), B(p.y), { color: p.color, scale: p.scale, alpha: Math.min(1, 2 * (1 - p.t / p.life)) });
+  for (let i = 0; i < G.lanes.length; i++) if (G.players[G.lanes[i]].super >= 1 && Math.sin(t * 6) > -0.3) drawText(b, 'TAP!', Lb.laneX(i), Lb.bh - 15, { color: 'gold' });
+
+  // HUD in pixels: wave, freeze timer, hearts and the team frenzy bar
   if (G.wave) {
+    drawText(b, 'WAVE ' + G.wave, 8, 12, { align: 'left', scale: 2 });
+    if (frozen) { b.drawImage(frame(ICONS.snow, 0), 8, 24); drawText(b, Math.ceil(G.freezeT) + 'S', 23, 30, { align: 'left', color: 'ice' }); }
     const n = Math.min(MAX_HEARTS, Math.max(G.hearts, view.maxHearts || 5)), hx = (bw >> 1) - n * 6;
     for (let k = 0; k < n; k++) draw(b, heart, k < G.hearts ? 0 : 1, hx + k * 12 + 5, 13, { scale: 1 });
     const fw = 90, fx0 = (bw >> 1) - 45, fy = 17, fill = frenzy ? G.frenzyT / FRENZY : G.frenzy;
     b.fillStyle = '#1c1230'; b.fillRect(fx0 - 1, fy - 1, fw + 2, 5);
     b.fillStyle = frenzy ? `hsl(${(t * 300) % 360},90%,60%)` : '#ff8a3c'; b.fillRect(fx0, fy, Math.round(fw * fill), 3);
+    drawText(b, frenzy ? 'FRENZY! X2 ' + Math.ceil(G.frenzyT) : 'TEAM FRENZY', bw >> 1, fy + 10, { color: frenzy ? 'flame' : 'white' });
   }
 
   // up to the screen
@@ -253,32 +263,24 @@ export function drawField(ctx, G, view) {
   if (frenzy) { ctx.lineWidth = s * 3; ctx.strokeStyle = `hsl(${(t * 300) % 360},90%,60%)`; ctx.strokeRect(0, 0, W, H); }
 
   // crisp text on top
-  text(ctx, G, view, Lo, Lb, s, t, frozen, frenzy);
+  text(ctx, G, view, Lo, Lb, s);
   return Lo;
 }
 
-function text(ctx, G, view, Lo, Lb, s, t, frozen, frenzy) {
-  const { W, H } = view;
+function text(ctx, G, view, Lo, Lb, s) {
+  const { H } = view;
   ctx.textAlign = 'center'; ctx.lineJoin = 'round';
-  const label = (str, x, y, size, col = '#fff', weight = 800) => {
-    ctx.font = `${weight} ${Math.round(size)}px ui-rounded, system-ui, sans-serif`;
-    ctx.lineWidth = Math.max(3, size * 0.22); ctx.strokeStyle = 'rgba(20,10,40,.85)'; ctx.strokeText(str, x, y); ctx.fillStyle = col; ctx.fillText(str, x, y);
+  const label = (str, x, y, size, col = '#fff', weight = 400) => {
+    ctx.font = `${weight} ${Math.round(size)}px "Tiny5", ui-rounded, system-ui, sans-serif`;
+    ctx.lineWidth = Math.max(3, size * 0.25); ctx.strokeStyle = '#140b26'; ctx.strokeText(str, x, y); ctx.fillStyle = col; ctx.fillText(str, x, y);
   };
   const wyS = (Lb.wall + 4) * s;
   for (let i = 0; i < G.lanes.length; i++) {
     const seat = G.lanes[i], p = G.players[seat], x = Lo.laneX(i);
-    label(view.name(seat), x, wyS + H * 0.07, H * 0.028, seatColor(seat), 900);
-    label(`${p.score.toLocaleString()}${p.combo >= 5 ? ` · ${p.combo}×${p.combo >= 10 ? '🔥' : ''}` : ''}`, x, wyS + H * 0.105, H * 0.023, p.combo >= 10 ? '#ffb02e' : '#ece6ff', 800);
-    if (p.super >= 1) label('TAP FOR SUPER!', x, H - H * 0.04, H * 0.018, '#fff', 900);
-    if (!view.live(seat) && G.phase !== 'lobby') label('reconnecting…', x, (Lo.top + Lo.wall) / 2, H * 0.025);
+    label(view.name(seat), x, wyS + H * 0.07, H * 0.03, seatColor(seat));
+    label(`${p.score.toLocaleString('en-US')}${p.combo >= 5 ? `  ${p.combo}x` : ''}`, x, wyS + H * 0.107, H * 0.025, p.combo >= 10 ? '#ffb02e' : '#ece6ff', 400);
+    if (!view.live(seat) && G.phase !== 'lobby') label('reconnecting', x, (Lo.top + Lo.wall) / 2, H * 0.028);
   }
-  for (const p of fx.pops) { ctx.globalAlpha = Math.min(1, 2 * (1 - p.t / p.life)); label(p.text, p.x, p.y, p.size, p.color, 900); }
-  ctx.globalAlpha = 1;
-  if (!G.wave) return;
-  ctx.textAlign = 'left'; label(`Wave ${G.wave}`, H * 0.03, H * 0.07, H * 0.045, '#fff', 900);
-  if (frozen) label(`❄️ ${Math.ceil(G.freezeT)}s`, H * 0.03, H * 0.12, H * 0.03, '#bfe8ff');
-  ctx.textAlign = 'center';
-  label(frenzy ? `🔥 FRENZY · DOUBLE POINTS · ${Math.ceil(G.frenzyT)}s` : 'TEAM FRENZY', W / 2, 26 * s + H * 0.02, H * 0.017, '#fff', 900);
 }
 
 // A row of chips: what is left to swipe or draw on a monster. The first has a ring in the colour of whoever is

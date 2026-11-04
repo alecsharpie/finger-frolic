@@ -8,41 +8,51 @@
 <link rel="stylesheet" href="shared/theme.css">
 <style>
   html, body { overflow: hidden; cursor: default; }
-  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
-  .over { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(20, 12, 40, .55); }
-  .card { display: grid; grid-template-columns: auto 1fr; gap: 4vh 3vw; align-items: start; width: min(1200px, 100%); padding: 4vh 3vw; background: var(--panel); border: 2px solid var(--line); border-radius: 28px; box-shadow: 0 20px 80px rgba(0,0,0,.5); }
-  .title { font-size: clamp(36px, 6vh, 72px); font-weight: 900; margin: 0; letter-spacing: -.01em; }
-  .title span { color: var(--accent); }
-  .qr { background: #fff; padding: 10px; border-radius: 18px; width: min(30vh, 300px); aspect-ratio: 1; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: pixelated; }
+  .over { position: fixed; inset: 0; display: grid; place-items: center; padding: 3vh 3vw; background: rgba(16, 9, 34, .6); }
+  /* pixel panels and buttons: notched corners, a hard inked edge and a drop shadow, no rounding */
+  .panel { --n: 8px; position: relative; background: var(--panel); clip-path: polygon(var(--n) 0, calc(100% - var(--n)) 0, 100% var(--n), 100% calc(100% - var(--n)), calc(100% - var(--n)) 100%, var(--n) 100%, 0 calc(100% - var(--n)), 0 var(--n));
+    box-shadow: inset 0 0 0 4px #140b26, inset 4px 4px 0 4px #4a3a86, inset -4px -4px 0 4px #1e1440; }
+  .card { display: grid; grid-template-columns: auto 1fr; gap: 3.5vh 3vw; align-items: start; width: min(1240px, 100%); padding: 4.5vh 3.2vw; }
+  .logo { display: block; margin: 0 0 1.2vh -4px; }
+  .tag { color: var(--ink-2); font-size: clamp(16px, 2.3vh, 24px); }
+  .qrbox { display: flex; flex-direction: column; gap: 1.4vh; align-items: center; }
+  .qr { background: #fff; padding: 10px; width: min(30vh, 300px); aspect-ratio: 1; box-shadow: 0 0 0 4px #140b26, 6px 6px 0 4px #0b0618; }
   .qr svg { width: 100%; height: 100%; display: block; }
-  .code { font-size: clamp(36px, 7vh, 80px); font-weight: 900; letter-spacing: .14em; color: var(--accent); line-height: 1; margin-top: 1.5vh; }
-  .url { color: var(--ink-2); font-size: clamp(13px, 1.8vh, 18px); word-break: break-all; margin-top: 6px; }
+  .codeline { display: flex; align-items: center; gap: 18px; margin-top: 2.4vh; flex-wrap: wrap; }
+  .codeline .lbl { color: var(--ink-2); font-size: clamp(14px, 1.9vh, 19px); line-height: 1.3; }
+  .url { color: var(--ink-2); font-size: clamp(13px, 1.7vh, 17px); word-break: break-all; }
   .warn { color: var(--bad); font-size: 16px; margin-top: 8px; }
-  .players { display: flex; flex-wrap: wrap; gap: 10px; margin: 2.5vh 0; min-height: 56px; }
-  .pl { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px; background: var(--bg-2); border: 3px solid var(--c); font-size: clamp(16px, 2.4vh, 24px); font-weight: 800; }
-  .pl .blob { width: 22px; height: 22px; border-radius: 50%; background: var(--c); }
+  .players { display: flex; flex-wrap: wrap; gap: 10px; margin: 2.6vh 0 2vh; min-height: 52px; align-items: center; }
+  .pl { display: flex; align-items: center; gap: 8px; padding: 4px 14px 4px 6px; background: var(--bg-2); box-shadow: inset 0 0 0 3px var(--c), 4px 4px 0 0 #0b0618; font-size: clamp(16px, 2.4vh, 24px); font-weight: 700; }
   .pl.off { opacity: .45; }
-  .pl .ok { color: var(--good); }
-  .empty { color: var(--ink-2); font-size: 20px; align-self: center; }
-  .how { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .how div { padding: 14px; border-radius: 16px; background: var(--bg-2); font-size: clamp(14px, 1.9vh, 19px); line-height: 1.35; }
-  .how b { display: block; font-size: 1.15em; margin-bottom: 4px; }
-  .prompt { font-size: clamp(18px, 2.8vh, 28px); font-weight: 800; }
-  .prompt .btn { margin-left: 12px; vertical-align: middle; }
-  .rank { width: 100%; border-collapse: collapse; font-size: clamp(16px, 2.4vh, 26px); margin: 2vh 0; }
-  .rank td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  .rank td.n { width: 1%; white-space: nowrap; font-weight: 900; }
-  .rank td.s { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
-  .diffs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: -1vh 0 2vh; }
-  .diffs .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .diffs .hint { color: var(--ink-2); font-size: 14px; }
-  .rank small { color: var(--ink-2); font-weight: 600; font-size: .7em; }
-  .rank .award { margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--bg-2); font-size: .8em; font-weight: 800; }
-  #banner { position: fixed; left: 0; right: 0; top: 36vh; text-align: center; pointer-events: none; font-size: clamp(48px, 12vh, 140px); font-weight: 900; color: #fff; text-shadow: 0 6px 0 rgba(20,10,40,.6), 0 0 40px rgba(0,0,0,.4); }
-  #banner small { display: block; font-size: .3em; font-weight: 800; color: var(--accent); }
-  #corner { position: fixed; right: 2vh; top: 1.6vh; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; border-radius: 16px; background: rgba(20,12,40,.7); font-size: 16px; color: var(--ink-2); }
-  #corner .qr { width: 9vh; padding: 4px; border-radius: 8px; }
-  #corner b { display: block; color: var(--accent); font-size: 26px; letter-spacing: .1em; }
+  .empty { color: var(--ink-2); font-size: clamp(16px, 2.2vh, 22px); }
+  .btn { border: 0; border-radius: 0; background: var(--panel); box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #5a4a9a, 4px 4px 0 0 #0b0618; font-weight: 700; display: inline-flex; align-items: center; gap: 10px; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #5a4a9a, 2px 2px 0 0 #0b0618; }
+  .btn.go { background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #fff3a0, 4px 4px 0 0 #0b0618; }
+  .btn.on { background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 3px #140b26, inset 3px 3px 0 3px #fff3a0, 4px 4px 0 0 #0b0618; outline: 0; }
+  .diffs { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 2.4vh; }
+  .hint { color: var(--ink-2); font-size: clamp(13px, 1.7vh, 16px); display: inline-flex; align-items: center; gap: 6px; }
+  .prompt { font-size: clamp(18px, 2.7vh, 28px); font-weight: 700; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .prompt b { color: var(--accent); }
+  .how { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .how > div { padding: 16px 16px 18px; background: var(--bg-2); box-shadow: inset 0 0 0 3px #140b26, 4px 4px 0 0 #0b0618; font-size: clamp(14px, 1.85vh, 19px); line-height: 1.35; color: var(--ink-2); }
+  .how h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 1.2em; color: var(--ink); font-weight: 700; }
+  .how .runes { display: flex; gap: 4px; margin-top: 8px; }
+  .foot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; color: var(--ink-2); font-size: clamp(13px, 1.7vh, 17px); margin-top: -1vh; }
+  .foot a { color: var(--ink-2); }
+  .rank { width: 100%; border-collapse: collapse; font-size: clamp(16px, 2.3vh, 26px); margin: 2vh 0; }
+  .rank td { padding: 8px 10px; border-bottom: 3px solid #140b26; vertical-align: middle; }
+  .rank td.n { width: 1%; white-space: nowrap; }
+  .rank td.s { text-align: right; }
+  .rank .who { font-weight: 700; }
+  .rank .award { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 10px 2px 4px; background: var(--bg-2); box-shadow: inset 0 0 0 2px #140b26; font-size: .78em; }
+  .rank small { display: block; color: var(--ink-2); font-size: .66em; margin-top: 2px; }
+  #banner { position: fixed; left: 0; right: 0; top: 24vh; display: flex; flex-direction: column; align-items: center; gap: 2vh; pointer-events: none; transition: opacity .2s; }
+  #banner .sub { display: flex; align-items: center; gap: 12px; padding: 10px 22px; background: rgba(16, 9, 34, .82); box-shadow: inset 0 0 0 3px #140b26; color: #fff; font-size: clamp(18px, 3vh, 34px); font-weight: 700; }
+  #corner { position: fixed; right: 2vh; top: 1.6vh; display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; background: rgba(16, 9, 34, .82); box-shadow: inset 0 0 0 3px #140b26; }
+  #corner .qr { width: 9vh; padding: 4px; box-shadow: none; }
+  #corner .lbl { color: var(--ink-2); font-size: 15px; }
   #sound { position: fixed; left: 50%; bottom: 2vh; transform: translateX(-50%); }
   #status { position: fixed; left: 2vh; bottom: 2vh; }
 </style>
@@ -53,7 +63,7 @@
 <div id="corner" class="hidden"></div>
 <div id="lobby" class="over"></div>
 <div id="results" class="over hidden"></div>
-<button id="sound" class="btn sm">🔇 Click anywhere for sound</button>
+<button id="sound" class="btn sm"></button>
 <div id="status" class="chip hidden"></div>
 <script type="module">
 import { hostRoom, param } from './shared/net.js';
@@ -62,6 +72,8 @@ import { Sfx } from './shared/audio.js';
 import { SEATS, KINDS, INTRO, DIFFS, DIFF_KEYS, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, awards, need, aim, isBossWave, isShapeToken } from './game.js';
 import { drawField, tickFx, warmUp, fx, burst, popup, spell, dying, bolt, seatColor, BODY } from './draw.js';
 import { SHAPES } from './shared/shapes.js';
+import { pic, ptext } from './shared/ui.js';
+import { DIFF_ICON, AWARD_ICON } from './icons.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -142,95 +154,108 @@ function drainLog() {
       const hx = Lo.laneX(from), hy = Lo.wall, tx = Lo.laneX(lane), ey = Lo.yOf(ey0);
       spell(token, { x: hx + 7 * Lo.s, y: Lo.wall - 18 * Lo.s }, { x: tx, y: ey }, seatColor(seat), id);
       spellFor[id] = token;
-      if (isShapeToken(token)) { popup(tx, ey - H * 0.15, SHAPE_SPELL[token], '#e9d8ff', H * 0.035); sfx.cast(token); }
-      if (lane !== from) popup(tx, hy - H * 0.16, `${nameOf(seat)} helps!`, seatColor(seat), H * 0.03);
+      if (isShapeToken(token)) { popup(tx, ey - H * 0.15, SHAPE_SPELL[token], 'violet', 2); sfx.cast(token); }
+      if (lane !== from) popup(tx, hy - H * 0.16, 'HELP!', seatColor(seat), 1);
       fx.lunge[seat] = 1;
       sfx.slash(p.combo);
-      if (p.combo && p.combo % 10 === 0) { popup(hx, hy - H * 0.12, `${p.combo} combo! 🔥`, seatColor(seat), H * 0.045); sfx.rep(p.combo / 10 + 4); }
+      if (p.combo && p.combo % 10 === 0) { popup(hx, hy - H * 0.12, `${p.combo} COMBO!`, 'flame', 2); sfx.rep(p.combo / 10 + 4); }
     } else if (k === 'miss') {
-      const [lane] = a; sfx.wrong(); popup(Lo.laneX(lane), Lo.wall - H * 0.1, 'dizzy!', '#ffe14d', H * 0.035);
+      const [lane] = a; sfx.wrong(); popup(Lo.laneX(lane), Lo.wall - H * 0.1, 'DIZZY', 'gold', 1);
     } else if (k === 'kill') {
       const [lane, id, kind, y, how] = a, ey = Lo.yOf(y);
       if (kind === 'boss') {
         sfx.boom(); fx.shake = 30; fx.flash = 1; fx.flashColor = '#ffd23f';
         for (let i = 0; i < G.lanes.length; i++) burst(Lo.laneX(i), ey, '#ffd23f', 40, 700);
-        banner(`👑 BOSS DOWN!<small>+${KINDS.boss.points} each and a heart back</small>`, 2.5);
+        banner('BOSS DOWN!', 'gold', `${pic('crown', 28)} +${KINDS.boss.points} each, and a heart back`, 2.5);
       } else {
         // the monster flashes until the spell that killed it lands, then bursts
         const delay = how === 'swipe' ? ({ circle: 0.28, tri: 0.3, square: 0.32, zig: 0.34, v: 0.3 }[spellFor[id]] || 0.13) : 0.02;
         delete spellFor[id];
         dying(kind, Lo.laneX(lane), ey, delay);
         setTimeout(() => { sfx.splat(); fx.shake = Math.max(fx.shake, 4); }, delay * 1000);
-        popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points * (G.frenzyT > 0 ? 2 : 1), G.frenzyT > 0 ? '#ffb02e' : '#fff', H * 0.035);
+        popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points * (G.frenzyT > 0 ? 2 : 1), G.frenzyT > 0 ? 'flame' : 'white', 1);
       }
     } else if (k === 'gift') {
-      sfx.chime(); popup(Lo.laneX(a[0]), Lo.top + H * 0.14, '🎁 a gift!', '#ffcf33', H * 0.035);
+      sfx.chime(); popup(Lo.laneX(a[0]), Lo.top + H * 0.14, 'GIFT!', 'gold', 1);
     } else if (k === 'escape') {
-      popup(Lo.laneX(a[0]), Lo.wall - H * 0.05, 'the gift got away…', '#ffcf33', H * 0.03);
+      popup(Lo.laneX(a[0]), Lo.wall - H * 0.05, 'IT GOT AWAY', 'gold', 1);
     } else if (k === 'power') {
       const [kind, seat] = a, who = nameOf(seat);
-      if (kind === 'freeze') { sfx.freeze(); fx.flash = 0.8; fx.flashColor = '#bfe8ff'; banner(`❄️ FREEZE!<small>${esc(who)} froze the field</small>`, 2); }
-      if (kind === 'heal') { sfx.heal(); fx.flash = 0.6; fx.flashColor = '#ff6b9a'; banner(`❤️ +1 HEART<small>from ${esc(who)}'s gift</small>`, 2); }
-      if (kind === 'storm') { sfx.zap(); fx.shake = 20; fx.flash = 1; fx.flashColor = '#ffffff'; banner(`⚡ LIGHTNING!<small>${esc(who)} called the storm</small>`, 2); }
+      if (kind === 'freeze') { sfx.freeze(); fx.flash = 0.8; fx.flashColor = '#bfe8ff'; banner('FREEZE!', 'ice', `${pic('snow', 28)} ${esc(who)} froze the field`, 2); }
+      if (kind === 'heal') { sfx.heal(); fx.flash = 0.6; fx.flashColor = '#ff6b9a'; banner('+1 HEART', 'red', `${pic('heart', 28)} A gift from ${esc(who)}`, 2); }
+      if (kind === 'storm') { sfx.zap(); fx.shake = 20; fx.flash = 1; fx.flashColor = '#ffffff'; banner('LIGHTNING!', 'gold', `${pic('bolt', 28)} ${esc(who)} called down the storm`, 2); }
     } else if (k === 'bolt') {
       const [lane, y] = a; bolt(Lo.laneX(lane), Lo.yOf(y));
     } else if (k === 'frenzy') {
       sfx.frenzy(); sfx.bpm = baseBpm + 30; fx.flash = 0.7; fx.flashColor = '#ffb02e';
-      banner('🔥 FRENZY! 🔥<small>double points · double knockback · supers charge twice as fast</small>', 2.5);
+      banner('FRENZY!', 'flame', `${pic('flame', 28)} Double points. Double knockback. Supers charge twice as fast.`, 2.5);
     } else if (k === 'frenzy-end') {
       sfx.bpm = baseBpm;
     } else if (k === 'super') {
       const [lane] = a, x = Lo.laneX(lane);
       sfx.bomb(); fx.shake = 18; fx.flash = 0.8; fx.flashColor = seatColor(G.lanes[lane]);
       for (let i = 0; i < 6; i++) burst(x, Lo.top + (Lo.wall - Lo.top) * (i / 5), seatColor(G.lanes[lane]), 16, 500);
-      popup(x, (Lo.top + Lo.wall) / 2, 'SUPER!', '#fff', H * 0.07);
+      popup(x, (Lo.top + Lo.wall) / 2, 'SUPER!', 'white', 3);
     } else if (k === 'breach') {
       const [lane, , lost] = a;
       sfx.breach(); fx.shake = 22; fx.flash = 1; fx.flashColor = '#ff3355';
-      popup(lane >= 0 ? Lo.laneX(lane) : W / 2, Lo.wall - H * 0.05, `−${lost} ❤️`, '#ff6b7f', H * 0.05);
+      popup(lane >= 0 ? Lo.laneX(lane) : W / 2, Lo.wall - H * 0.05, lost > 1 ? `-${lost} HEARTS` : '-1 HEART', 'red', 2);
     } else if (k === 'wave') {
       const [n, fresh] = a; sfx.horn();
-      const sub = isBossWave(n) ? '👑 BOSS WAVE: everyone clears their own row' : fresh.length ? 'New: ' + fresh.map(f => INTRO[f]).join(' · ') : '';
-      banner(`Wave ${n}${sub ? `<small>${sub}</small>` : ''}`, fresh.length ? 3.5 : 2.2);
+      const sub = isBossWave(n) ? `${pic('boss', 36)} Boss wave. It falls when everyone clears their row.`
+        : fresh.length ? fresh.map(f => `${pic(f, 32)} ${INTRO[f]}`).join('&emsp;') : '';
+      banner(`WAVE ${n}`, 'white', sub, fresh.length || isBossWave(n) ? 3.5 : 2.2);
       baseBpm = 116 + Math.min(40, n * 3); sfx.bpm = baseBpm;
     } else if (k === 'cleared') {
       const [n, perfect] = a;
       sfx.cheer();
       if (perfect) { burst(W / 2, H * 0.4, '#ffd23f', 60, 900); burst(W / 2, H * 0.4, '#ffffff', 30, 700); }
-      banner(perfect ? `✨ PERFECT WAVE! ✨<small>no hearts lost · +${100 * n} each</small>` : `Wave ${n} cleared!<small>new players can join now</small>`, 3.2);
+      banner(perfect ? 'PERFECT!' : 'WAVE CLEAR', perfect ? 'gold' : 'white',
+        perfect ? `${pic('sparkle', 28)} Not a heart lost. +${100 * n} each` : 'Catch your breath. New wizards can join now.', 3.2);
     } else if (k === 'over') {
       sfx.stopMusic(); sfx.hurt(); ready.clear(); overAt = performance.now(); renderOverlays();
     }
   }
 }
 let baseBpm = 120;
-const spellFor = {}; // enemy id → the token of the last spell cast at it
-const SHAPE_SPELL = { circle: '🔥 Fireball!', tri: '⚡ Lightning!', square: '🧊 Ice cage!', zig: '🌪️ Whirlwind!', v: '✨ Smite!' };
+const spellFor = {}; // enemy id -> the token of the last spell cast at it
+const SHAPE_SPELL = { circle: 'FIREBALL!', tri: 'LIGHTNING!', square: 'ICE CAGE!', zig: 'WHIRLWIND!', v: 'SMITE!' };
 
-function banner(html, secs) { $('banner').innerHTML = html; bannerUntil = performance.now() + secs * 1000; }
+// A big pixel-font line, and an optional sub line (HTML, may hold pixel icons).
+function banner(title, color = 'white', sub = '', secs = 2) {
+  const big = Math.round(Math.min(innerHeight * 0.1, innerWidth * 0.7 / Math.max(4, title.length * 0.62)));
+  const html = ptext(title, big, color) + (sub ? `<div class="sub">${sub}</div>` : '');
+  if ($('banner').innerHTML !== html) $('banner').innerHTML = html;
+  bannerUntil = performance.now() + secs * 1000;
+}
 
 // ---------- the TV's overlays ----------
+const rune = g => pic('chip:' + g, 30);
+const n = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
 const HOW = `
   <div class="how">
-    <div><b>🪄 Swipe to cast</b>Swipe the arrows over the monster in your lane, in order: each one fires a spell. Purple runes? <i>Draw</i> that shape on your phone (○ △ ✓ □ Z). Wrong = dizzy!</div>
-    <div><b>🤝 Lane clear? Help out</b>When your lane is empty, your swipes hit the closest monster in the lanes next to you.</div>
-    <div><b>🎁 Pop the gifts</b>Golden boxes drop power-ups for everyone: ❄️ freeze, ❤️ a heart, or ⚡ lightning down every lane.</div>
-    <div><b>🔥 Frenzy &amp; supers</b>Team swipes fill the FRENZY meter: double points! Fill your own meter, then tap for a super. Every 5th wave: a boss.</div>
+    <div><h3>${pic('wand', 30)} Swipe to cast</h3>Swipe the arrows over the monster in your lane, in order. Every swipe fires a spell. Wrong way and you're dizzy.</div>
+    <div><h3>${pic('pencil', 30)} Draw the runes</h3>Purple runes need a shape. Draw it on your phone in one stroke.<div class="runes">${['circle', 'tri', 'v', 'square', 'zig'].map(rune).join('')}</div></div>
+    <div><h3>${pic('shield', 30)} Mind your friends</h3>Lane clear? Your spells fly to the lanes beside you. Fill your own meter, then tap for a super.</div>
+    <div><h3>${pic('gift', 30)} Gifts and frenzy</h3>Pop gifts for a freeze, a heart or a lightning storm. Teamwork fills the frenzy meter: double points.</div>
   </div>`;
 
-function playersHtml(showReady) {
+function playersHtml() {
   const seats = SEATS.filter(s => room.seat(s));
-  if (!seats.length) return '<div class="empty">Waiting for phones…</div>';
-  return seats.map(s => `<div class="pl${live(s) ? '' : ' off'}" style="--c:${seatColor(s)}"><span class="blob"></span>${esc(nameOf(s))}${showReady ? (ready.has(s) ? ' <span class="ok">✓ ready</span>' : '') : ''}${live(s) ? '' : ' <small>reconnecting…</small>'}</div>`).join('');
+  if (!seats.length) return '<div class="empty">No wizards yet. Scan the code to join.</div>';
+  return seats.map(s => `<div class="pl${live(s) ? '' : ' off'}" style="--c:${seatColor(s)}">${pic('wizard:' + seatColor(s), 40)}${esc(nameOf(s))}${ready.has(s) ? ' ' + pic('check', 22) : ''}${live(s) ? '' : ' <small>reconnecting</small>'}</div>`).join('');
 }
 
 function diffHtml() {
-  return `<div class="diffs">${DIFF_KEYS.map(k => `<button class="btn sm${k === diff ? ' on' : ''}" data-diff="${k}">${DIFFS[k].icon} ${DIFFS[k].label}</button>`).join('')}
-    <span class="hint">swipe ← → on a phone to change</span></div>`;
+  return `<div class="diffs">${DIFF_KEYS.map(k => `<button class="btn sm${k === diff ? ' on' : ''}" data-diff="${k}">${pic(DIFF_ICON[k], 24)}${DIFFS[k].label}</button>`).join('')}
+    <span class="hint">or swipe ${pic('arrowL', 14)} ${pic('arrowR', 14)} on a phone</span></div>`;
 }
 
-function joinHtml() {
-  return `<div class="qr">${qr}</div>`;
+function promptHtml(again) {
+  const here = present(), n = here.filter(s => ready.has(s)).length;
+  if (!here.length) return 'Scan the code to join. Up to eight wizards.';
+  if (n === here.length) return 'Here we go!';
+  return `Everyone swipe <b>up</b> when ready &nbsp;${n}/${here.length}`;
 }
 
 function renderOverlays() {
@@ -238,46 +263,44 @@ function renderOverlays() {
   $('lobby').classList.toggle('hidden', !lobby);
   $('results').classList.toggle('hidden', !over);
   $('corner').classList.toggle('hidden', lobby || over);
-  const here = present(), waiting = here.filter(s => !ready.has(s)).length;
-  const prompt = here.length
-    ? `${waiting ? `Everyone swipe <span style="color:var(--accent)">UP</span> on your phone when ready (${here.length - waiting}/${here.length})` : 'Starting…'}`
-    : 'Scan the code with your phone to join (up to 8 players)';
+  const here = present();
+  const logoH = Math.round(Math.min(innerHeight * 0.1, 96));
   if (lobby) {
-    const html = `<div class="card">
-      ${joinHtml()}
+    const html = `<div class="card panel">
+      <div class="qrbox"><div class="qr">${qr}</div></div>
       <div>
-        <h1 class="title">Finger <span>Frolic</span></h1>
-        <div style="color:var(--ink-2);font-size:clamp(16px,2.2vh,22px)">Hold the wall! Monsters march down your lane. Your phone is your wand.</div>
-        <div class="code">${esc(room.room)}</div>
-        <div class="url">${esc(url)}</div>
-        ${stuckOnLocalhost(url) ? '<div class="warn">This TV page is on localhost, so phones cannot reach that link. Run <b>npm start</b> and open the address it prints.</div>' : ''}
-        <div class="players">${playersHtml(true)}</div>
+        <div class="logo">${ptext('FINGER', logoH, 'white')} ${ptext('FROLIC', logoH, 'gold')}</div>
+        <div class="tag">Monsters are marching on the castle. Your phone is your wand.</div>
+        <div class="codeline">${ptext(room.room, Math.round(logoH * 0.85), 'gold')}<div class="lbl">Scan the code, or open<br><span class="url">${esc(url)}</span></div></div>
+        ${stuckOnLocalhost(url) ? '<div class="warn">This page is on localhost, so phones can\'t reach it. Run <b>npm start</b> and open the address it prints.</div>' : ''}
+        <div class="players">${playersHtml()}</div>
         ${diffHtml()}
-        <div class="prompt">${prompt} ${here.length ? '<button class="btn sm go" data-act="start">Start now</button>' : ''}</div>
+        <div class="prompt">${promptHtml()} ${here.length ? '<button class="btn sm go" data-act="start">Start now</button>' : ''}</div>
       </div>
       ${HOW}
-      ${self === top ? '<a href="dev.html" style="grid-column:1/-1;justify-self:end;color:var(--ink-2);font-size:14px">dev mode: TV and phones in one tab →</a>' : ''}
+      <div class="foot"><span>Every fifth wave, a boss. It only falls when everyone clears their row.</span>${self === top ? '<a href="dev.html">Dev mode</a>' : ''}</div>
     </div>`;
     if ($('lobby').innerHTML !== html) $('lobby').innerHTML = html;
   }
   if (over) {
     const A = awards(G);
-    const rows = ranking(G).map(([s, p], i) => `<tr><td class="n">${['🥇', '🥈', '🥉'][i] || i + 1}</td>
-      <td><span style="color:${seatColor(s)};font-weight:900">${esc(nameOf(s))}</span> <span class="award">${A[s].icon} ${esc(A[s].title)}</span><br><small>${p.kills} monsters · best combo ${p.best} · ${p.assists} assists · ${p.gifts} gifts</small></td>
-      <td class="s">${p.score.toLocaleString()}</td></tr>`).join('');
-    const html = `<div class="card">
-      ${joinHtml()}
+    const rows = ranking(G).map(([s, p], i) => `<tr><td class="n">${i < 3 ? pic('medal' + (i + 1), 40) : ptext(String(i + 1), 26)}</td>
+      <td><span class="who" style="color:${seatColor(s)}">${esc(nameOf(s))}</span><span class="award">${pic(AWARD_ICON[A[s].icon] || 'brick', 22)}${esc(A[s].title)}</span>
+        <small>${n(p.kills, 'monster')}, best combo ${p.best}, ${n(p.assists, 'assist')}, ${n(p.gifts, 'gift')}</small></td>
+      <td class="s">${ptext(p.score.toLocaleString('en-US'), 30, i ? 'white' : 'gold')}</td></tr>`).join('');
+    const html = `<div class="card panel">
+      <div class="qrbox"><div class="qr">${qr}</div></div>
       <div>
-        <h1 class="title">The wall fell on <span>wave ${G.wave}</span></h1>
+        <div class="logo">${ptext('THE WALL FELL', Math.round(logoH * 0.8), 'white')}</div>
+        <div class="tag">You held out until wave ${G.wave} on ${DIFFS[diff].label}.</div>
         <table class="rank">${rows}</table>
-        <div class="players">${playersHtml(true)}</div>
         ${diffHtml()}
-        <div class="prompt">${prompt} <button class="btn sm go" data-act="start">Play again</button> <button class="btn sm" data-act="lobby">Lobby</button></div>
+        <div class="prompt">${promptHtml(true)} <button class="btn sm go" data-act="start">Play again</button> <button class="btn sm" data-act="lobby">Back to lobby</button></div>
       </div>
     </div>`;
     if ($('results').innerHTML !== html) $('results').innerHTML = html;
   }
-  const corner = `<div class="qr">${qr}</div><div>Join in<b>${esc(room.room)}</b></div>`;
+  const corner = `<div class="qr">${qr}</div><div><div class="lbl">Join in</div>${ptext(room.room, 34, 'gold')}</div>`;
   if ($('corner').innerHTML !== corner) $('corner').innerHTML = corner;
 }
 
@@ -316,7 +339,7 @@ function snapshot() {
   }
   const rank = over ? ranking(G).map(([s]) => s) : null;
   return { t: 's', ph: phase, w: G.wave, h: G.hearts, cd: Math.ceil(mode === 'countdown' ? countdown : G.phase === 'break' ? G.timer : 0), n: present().length, p, rank,
-    diff: DIFFS[diff].icon + ' ' + DIFFS[diff].label,
+    diff,
     fz: Math.round(G.frenzy * 100), fr: Math.ceil(G.frenzyT), ice: Math.ceil(G.freezeT), tev: G.tev, tl: G.tlast };
 }
 function sync(now) {
@@ -351,7 +374,7 @@ function frame(now) {
     const before = Math.ceil(countdown);
     countdown -= dt; G.t += dt;
     if (Math.ceil(countdown) !== before) { dirty = true; if (countdown > 0) sfx.beep(false); }
-    banner(countdown > 0 ? String(Math.ceil(countdown)) : 'GO!', 0.6);
+    banner(countdown > 0 ? String(Math.ceil(countdown)) : 'GO!', countdown > 0 ? 'white' : 'gold', '', 0.6);
     if (countdown <= 0) {
       if (!present().length) { toLobby(); }
       else { startGame(G, present()); for (const s of G.lanes) G.players[s].name = nameOf(s); mode = 'play'; sfx.beep(true); sfx.startMusic(120); dirty = true; renderOverlays(); }
@@ -375,6 +398,7 @@ function frame(now) {
   perf.push(performance.now() - work0); if (perf.length > 120) perf.shift();
   requestAnimationFrame(frame);
 }
+$('sound').innerHTML = `${pic('mute', 22)} Click anywhere for sound`;
 if (param('debug') != null) window.frolic = { get G() { return G; }, get mode() { return mode; }, need, aim, perf: () => { const a = [...perf].sort((x, y) => x - y); return { avg: a.reduce((x, y) => x + y, 0) / a.length, p95: a[Math.floor(a.length * 0.95)], max: a.at(-1) }; } }; // for tests and bots
 renderOverlays();
 requestAnimationFrame(frame);

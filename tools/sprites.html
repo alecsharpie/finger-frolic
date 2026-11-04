@@ -22,6 +22,8 @@
 import { frame, cacheSize } from '../shared/pix.js';
 import { ALL, MONSTERS, wizard, chip, GLYPH } from '../sprites.js';
 import { COLORS } from '../draw.js';
+import { ICONS } from '../icons.js';
+import { textCanvas, INKS } from '../shared/pixfont.js';
 const S = +new URLSearchParams(location.search).get('scale') || 5, out = document.getElementById('out');
 function show(row, c, label, s = S, bg) {
   const v = document.createElement('canvas'); v.width = c.width * s; v.height = c.height * s;
@@ -41,6 +43,11 @@ for (const c of COLORS) for (let f = 0; f < 4; f++) show(w, frame(wizard, f, 'no
 const ch = section('chips');
 for (const g of Object.keys(GLYPH)) { const kind = 'udlr'.includes(g) ? 'arrow' : 'shape'; show(ch, frame(chip, 0, 'normal', { kind, glyph: g }, kind + g), g, 4); }
 show(ch, frame(chip, 0, 'normal', { kind: 'trick', glyph: 'u' }, 'tricku'), 'trick', 4);
+const ic = section('icons');
+for (const [k, spec] of Object.entries(ICONS)) show(ic, frame(spec, 0), k, 4);
+const ft = section('pixel font');
+for (const c of Object.keys(INKS)) show(ft, textCanvas('FINGER FROLIC 0123456789 !?', c), c, 3);
+show(ft, textCanvas('THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. +-X:/'), 'all', 3);
 const hr = section('heart'); show(hr, frame(ALL.heart, 0), 'full', 6); show(hr, frame(ALL.heart, 1), 'empty', 6);
 document.title += ` · ${cacheSize()} frames in ${(performance.now() - t0).toFixed(1)} ms`;
 document.body.insertAdjacentHTML('beforeend', `<p style="color:var(--ink-2)">${cacheSize()} frames baked in ${(performance.now() - t0).toFixed(1)} ms</p>`);
