@@ -19,6 +19,8 @@ your wall, in order, before it gets there. Up to 8 players, co-op, waves until t
 | 🎁 Gifts | Golden boxes from wave 2. Pop one and the team gets a power-up: ❄️ freeze (everything crawls for 5 s), ❤️ a heart back, or ⚡ lightning (zaps the front monster in every lane). A gift that gets away costs nothing. |
 | 🔥 Team frenzy | Everyone's good swipes fill a shared meter (wrong swipes and breaches drain it). When it's full: 8 s of double points, double knockback and twice-as-fast supers. |
 | ⚡ Super | Good swipes fill your own meter. When it's full, **tap** to wipe out your lane. |
+| 🌟 Mega spell | If every wizard (two or more) taps their super within 3 seconds of each other, lightning clears the whole field. |
+| 💥 Chains and saves | Kills within 1.2 s of each other chain into DOUBLE!, TRIPLE!, QUAD!, RAMPAGE! (+25 per kill in the chain). Killing a monster right at the wall is a CLOSE CALL (+100). |
 | ❤️ Hearts | The team shares 5 (up to 8). Each monster that reaches the wall costs one; the game ends at zero. A wave with no breach is a ✨ perfect wave: +100 × wave each. |
 | 👑 Boss | Every 5th wave ends with a boss as wide as the field. Each player has their own row of its arrows, and it only falls when everyone finishes theirs (+1 heart). |
 
@@ -31,7 +33,10 @@ there). Harder means fewer hearts, faster and bigger waves, less knockback, long
 harder to fill, and new monsters and shapes arriving sooner. `?diff=hard` on the TV page preselects one.
 
 At the end, everyone gets an award (Monster Masher, Combo Machine, Guardian Angel, Sharpshooter, Gift Grabber,
-Dizzy Dancer…) on the TV and on their phone.
+Last-Second Hero, Dizzy Dancer…) on the TV and on their phone.
+
+**Feel:** each kill holds the game still for a beat (hit-stop), bursts the monster into its own sprite pixels, and
+sends soul orbs arcing back into the caster's wizard with a rising chime. Phones leave a streak behind every swipe.
 
 Drop-in, drop-out: new phones can scan in at any time and join at the next wave. A phone that locks or drops
 gets its seat back when it reconnects; while it's gone, the monsters in its lane wait for it.
@@ -63,6 +68,10 @@ off, so the cost does not grow with the TV's resolution. The scenery is baked on
 top at full resolution. On a 3840×2160 canvas with 8 players, 80 monsters, frenzy, freeze and constant spells,
 a frame is ~1 ms of work on average (p95 under 5 ms, headless Chromium without a GPU). `?debug` exposes
 `frolic.perf()` on the TV page.
+
+**UI art:** no emoji anywhere: icons are hand-placed pixel grids (`icons.js`), big text uses a 5×7 bitmap font
+(`shared/pixfont.js`) painted like the sprites, and `shared/ui.js` turns both into crisp `<img>`s for the HTML menus.
+Body copy uses the Tiny5 pixel webfont.
 
 **Sprite sheet:** `/tools/sprites.html` (with `npm start`, or on the live site) shows every sprite and frame, large,
 with its variants and at 1×. Edit `sprites.js` and reload.

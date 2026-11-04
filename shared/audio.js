@@ -190,3 +190,11 @@ Object.assign(Sfx.prototype, {
     else if (shape === 'v') { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'sine', vol: 0.12, delay: i * 0.04 })); }
   },
 });
+
+// satisfaction: soul orbs, chains, saves, the mega spell
+Object.assign(Sfx.prototype, {
+  pling(i = 0) { const f = 880 * Math.pow(2, [0, 2, 4, 7, 9, 12, 14, 16][i % 8] / 12); this.tone(f, 0.09, { type: 'square', vol: 0.05 }); this.tone(f * 2, 0.12, { type: 'sine', vol: 0.06, delay: 0.01 }); },
+  multi(n) { const base = [0, 0, 523, 659, 784, 988][Math.min(n, 5)]; [0, 4, 7, 12].slice(0, n + 1).forEach((st, i) => this.tone(base * Math.pow(2, st / 12), 0.16, { type: 'square', vol: 0.09, delay: i * 0.05 })); },
+  close() { this.noise(0.4, { vol: 0.3, freq: 200, slide: 4000, type: 'bandpass', q: 2 }); [1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', vol: 0.12, delay: 0.1 + i * 0.06 })); },
+  mega() { this.bomb(); this.zap(); [262, 330, 392, 523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.6, { type: 'sawtooth', vol: 0.07, delay: 0.05 + i * 0.05 })); },
+});

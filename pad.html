@@ -155,7 +155,7 @@ function render() {
   else if (me && me[3]) msg = scr(pic('stars', 90), 'DIZZY', 'Wrong spell. Shake it off…', 'gold');
   else if (ph === 'break') msg = scr(pic('sparkle', 90), 'WAVE CLEAR', `Next wave in ${S.cd}…`, 'gold');
   else if (me && me[11]) msg = scr(pic('pencil', 90), 'DRAW IT', 'Draw the purple rune\'s shape, in one stroke.', 'violet');
-  else if (sup >= 100) msg = scr(pic('bolt', 90), 'TAP!', 'Your super is charged. Tap to clear your lane.', 'gold');
+  else if (sup >= 100) msg = scr(pic('bolt', 90), 'TAP!', 'Your super is charged. Tap to clear your lane, or wait and tap together with everyone for a mega spell.', 'gold');
   else if (me && me[9] === 1) msg = scr(pic('shield', 90), 'HELPING', 'Your lane is clear, so your spells fly next door.');
   else if (me && me[9] === 2) msg = scr(wiz, 'ALL CLEAR', 'Nothing in your lane. Be ready to help.');
   else if (S.fr > 0) msg = scr(pic('flame', 90), 'FRENZY!', 'Double points. Go, go, go!', 'flame');
@@ -165,7 +165,7 @@ function render() {
 
 // buzz and flash for what happened on the TV (my ev counter moves on each event; last says which)
 const TEAM = { frenzy: ['FRENZY!', 'flame', [60, 40, 60, 40, 200]], freeze: ['FREEZE!', 'ice', [30, 30, 30]], heal: ['+1 HEART', 'red', [40, 40, 120]],
-  storm: ['LIGHTNING!', 'gold', [200]], perfect: ['PERFECT!', 'gold', [30, 30, 30, 30, 120]], boss: ['BOSS DOWN!', 'gold', [100, 50, 300]] };
+  storm: ['LIGHTNING!', 'gold', [200]], mega: ['MEGA SPELL!', 'violet', [80, 40, 80, 40, 400]], perfect: ['PERFECT!', 'gold', [30, 30, 30, 30, 120]], boss: ['BOSS DOWN!', 'gold', [100, 50, 300]] };
 function shout(text, color = 'white') {
   const el = $('shout'); el.innerHTML = ptext(text, 44, color);
   el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
@@ -180,6 +180,8 @@ function feel() {
     if (b[5] === 'ouch') zoneFx('ouch');
     if (b[5] === 'super') shout('SUPER!', 'gold');
     if (b[1] >= 10 && b[1] % 10 === 0 && b[1] !== a[1]) shout(`${b[1]} COMBO!`, 'flame');
+    if (b[12] >= 2 && b[12] !== a[12]) { shout(['', '', 'DOUBLE!', 'TRIPLE!', 'QUAD!', 'RAMPAGE!'][Math.min(b[12], 5)], b[12] >= 4 ? 'flame' : 'gold'); buzz([15, 25, 15, 25, 40]); }
+    if (b[13] > (a[13] || 0)) { shout('CLOSE CALL!', 'gold'); buzz([10, 10, 10, 10, 120]); }
   } else if (prev && S.h < prev.h) { buzz(60); zoneFx('ouch'); }
   if (prev && S.tev !== prev.tev && TEAM[S.tl]) { const [t, c, v] = TEAM[S.tl]; shout(t, c); buzz(v); }
   if (prev && prev.ph !== S.ph && S.ph === 'wave') buzz([30, 60, 30]);
@@ -220,9 +222,9 @@ function trace(pts, color, alpha = 1) {
   }
   ictx.globalAlpha = 1; ictx.shadowBlur = 0;
 }
-function fadeOut(pts, color) {
+function fadeOut(pts, color, ms = 350) {
   cancelAnimationFrame(fade); const t0 = performance.now();
-  const go = () => { const k = 1 - (performance.now() - t0) / 350; if (k <= 0) { ictx.clearRect(0, 0, innerWidth, innerHeight); return; } trace(pts, color, k); fade = requestAnimationFrame(go); };
+  const go = () => { const k = 1 - (performance.now() - t0) / ms; if (k <= 0) { ictx.clearRect(0, 0, innerWidth, innerHeight); return; } trace(pts, color, k); fade = requestAnimationFrame(go); };
   go();
 }
 const color = () => getComputedStyle(document.body).getPropertyValue('--c').trim() || '#ffd23f';
@@ -241,6 +243,9 @@ addEventListener('pointermove', e => {
   if (Math.hypot(dx, dy) < MIN) return;
   s.done = true;
   send(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'));
+  // a streak where the finger went, flung on a little further
+  const k = 2.2, end = [s.x + dx * k, s.y + dy * k];
+  fadeOut([[s.x, s.y], [e.clientX, e.clientY], end], color(), 220);
 }, { passive: true });
 const up = e => {
   const s = touches.get(e.pointerId); touches.delete(e.pointerId);

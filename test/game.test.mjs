@@ -189,3 +189,31 @@ test('harder difficulties: fewer hearts, faster and bigger waves, new monsters s
   assert.ok(hearts('easy') > hearts('normal') && hearts('normal') > hearts('hard') && hearts('hard') > hearts('nightmare'));
   const G = newGame(1, 'hard'); startGame(G, ['p1']); assert.equal(G.diff, 'hard', 'restarts keep the difficulty');
 });
+
+test('quick kills chain into multi-kills; a kill at the wall is a close call', () => {
+  const G = newGame(20); startGame(G, ['p1']); G.queue = [];
+  G.enemies = [grunt(1, 0, 0.95), grunt(2, 0, 0.5), grunt(3, 0, 0.3)];
+  swipe(G, 'p1', 'u'); step(G, 0.3); swipe(G, 'p1', 'u'); step(G, 0.3); swipe(G, 'p1', 'u');
+  const multis = G.log.filter(l => l[0] === 'multi').map(l => l[2]);
+  assert.deepEqual(multis, [2, 3]);
+  assert.equal(G.players.p1.saves, 1);
+  assert.ok(G.log.some(l => l[0] === 'close'));
+  G.enemies = [grunt(4, 0, 0.4)]; step(G, 2); swipe(G, 'p1', 'u');
+  assert.equal(G.log.filter(l => l[0] === 'multi').length, 2, 'too slow for a chain');
+});
+
+test('everyone firing their super together casts a mega spell over the whole field', () => {
+  const G = newGame(21); startGame(G, ['p1', 'p2', 'p3']); G.queue = [];
+  G.enemies = [grunt(1, 0, 0.5), grunt(2, 1, 0.5), grunt(3, 2, 0.5), grunt(4, 2, 0.3)];
+  for (const s of ['p1', 'p2', 'p3']) G.players[s].super = 1;
+  swipe(G, 'p1', 'tap'); step(G, 1); swipe(G, 'p2', 'tap');
+  assert.ok(!G.log.some(l => l[0] === 'mega'));
+  step(G, 1); swipe(G, 'p3', 'tap');
+  assert.ok(G.log.some(l => l[0] === 'mega')); assert.equal(G.tlast, 'mega');
+  assert.equal(G.enemies.length, 0);
+  // too far apart: no mega
+  const H = newGame(22); startGame(H, ['p1', 'p2']); H.queue = []; H.enemies = [grunt(1, 0, 0.5)];
+  H.players.p1.super = H.players.p2.super = 1;
+  swipe(H, 'p1', 'tap'); step(H, 4); swipe(H, 'p2', 'tap');
+  assert.ok(!H.log.some(l => l[0] === 'mega'));
+});

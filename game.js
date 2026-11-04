@@ -33,6 +33,10 @@ export const BOSS_EVERY = 5;
 export const ASSIST_FROM = 0.25;    // a neighbour's monster must be this far down before you can help with it
 export const FREEZE = 5, FRENZY = 8; // seconds
 export const POWERS = ['freeze', 'heal', 'storm'];
+export const MULTI_WINDOW = 1.2;    // seconds between kills that still count as one chain
+export const CLOSE_CALL = 0.88;     // a kill this near the wall is a close call
+export const MEGA_WINDOW = 3;       // everyone's supers within this many seconds: a mega spell
+export const MULTI_NAMES = ['', '', 'DOUBLE!', 'TRIPLE!', 'QUAD!', 'RAMPAGE!'];
 
 // speed: lane lengths per second at wave 1 (1/9 = nine seconds from the woods to the wall)
 export const KINDS = {
@@ -65,7 +69,7 @@ const pick = (r, a) => a[Math.floor(r() * a.length)];
 const between = (r, [a, b]) => a + Math.floor(r() * (b - a + 1));
 
 export function newPlayer(name = '') {
-  return { name, score: 0, combo: 0, best: 0, kills: 0, super: 0, stun: 0, ev: 0, last: '', misses: 0, hits: 0, assists: 0, gifts: 0 };
+  return { name, score: 0, combo: 0, best: 0, kills: 0, super: 0, stun: 0, ev: 0, last: '', misses: 0, hits: 0, assists: 0, gifts: 0, saves: 0, chain: 0, lastKill: -9, lastSuper: -9 };
 }
 
 export function newGame(seed, diff = 'normal') {
@@ -243,8 +247,13 @@ function kill(G, e, seat, how = 'swipe') {
     team(G, 'boss');
   } else {
     const p = G.players[seat]; p.score += Math.round(pts * mult(G, p)); p.kills++;
+    // chains of quick kills, and saves right at the wall
+    // (lightning and the mega spell are the team's doing, not a chain of yours)
+    if (how !== 'mega' && how !== 'storm') { p.chain = G.t - p.lastKill <= MULTI_WINDOW ? p.chain + 1 : 1; p.lastKill = G.t; }
+    if (p.chain >= 2 && how !== 'mega' && how !== 'storm' && p.lastKill === G.t) { p.score += 25 * p.chain; say(G, 'multi', seat, Math.min(p.chain, MULTI_NAMES.length - 1)); }
+    if (e.y >= CLOSE_CALL && how !== 'storm') { p.saves++; p.score += 100; say(G, 'close', e.lane, seat, e.y); }
   }
-  say(G, 'kill', e.kind === 'boss' ? -1 : e.lane, e.id, e.kind, e.y, how);
+  say(G, 'kill', e.kind === 'boss' ? -1 : e.lane, e.id, e.kind, e.y, how, seat);
   if (e.kind === 'gift') power(G, seat, e);
 }
 
@@ -269,7 +278,18 @@ function power(G, seat, e) {
 }
 
 function fireSuper(G, seat, lane, p) {
-  p.super = 0; bump(p, 'super'); say(G, 'super', lane);
+  p.super = 0; p.lastSuper = G.t; bump(p, 'super'); say(G, 'super', lane);
+  // everyone (two or more) firing within a few seconds of each other: a mega spell across the whole field
+  if (G.lanes.length >= 2 && G.lanes.every(s => G.t - G.players[s].lastSuper <= MEGA_WINDOW)) {
+    for (const s of G.lanes) G.players[s].lastSuper = -9;
+    team(G, 'mega'); say(G, 'mega');
+    for (const e of G.enemies.slice()) {
+      if (e.y <= 0) continue;
+      if (e.kind === 'boss') { e.tracks.forEach((t, i) => { e.hits[i] = Math.min(t.length, e.hits[i] + 3); }); if (done(e)) kill(G, e, seat, 'mega'); }
+      else kill(G, e, G.lanes[e.lane] || seat, 'mega');
+    }
+    return 'super';
+  }
   for (const e of G.enemies.slice()) {
     if (e.y <= 0) continue;
     if (e.kind === 'boss') {
@@ -362,6 +382,7 @@ const AWARDS = [
   ['angel', 'Guardian Angel', 'most assists', p => p.assists],
   ['sharp', 'Sharpshooter', 'most accurate', p => p.hits >= 5 ? p.hits / (p.hits + p.misses) : 0],
   ['gifts', 'Gift Grabber', 'most gifts popped', p => p.gifts],
+  ['saves', 'Last-Second Hero', 'most close calls', p => p.saves],
   ['dizzy', 'Dizzy Dancer', 'most wrong spells', p => p.misses],
   ['brick', 'Brick in the Wall', 'held the line', () => 0.001],
 ];

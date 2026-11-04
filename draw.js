@@ -26,7 +26,45 @@ function layoutBuf(bw, bh, L) {
 }
 
 // ---------- effects (screen coordinates) ----------
-export const fx = { parts: [], pops: [], spells: [], bolts: [], dying: [], snow: [], shake: 0, flash: 0, flashColor: '#ff3355', lunge: {} };
+export const fx = { parts: [], pops: [], spells: [], bolts: [], dying: [], snow: [], orbs: [], shake: 0, flash: 0, flashColor: '#ff3355', lunge: {}, glow: {},
+  stop: 0, onOrb: null };
+const MAX_PARTS = 3000;
+
+// Hit-stop: the whole game holds still for a moment on a big hit (index.html skips the rules while it runs).
+export function hitStop(secs) { fx.stop = Math.max(fx.stop, secs); }
+
+// A monster bursting into its own pixels: every other pixel of its sprite flies off as a chunky particle.
+const PIXELS = new Map();
+function spritePixels(kind) {
+  let list = PIXELS.get(kind);
+  if (!list) {
+    const spec = MONSTERS[kind], c = frame(spec, 0), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    list = [];
+    for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+      const i = (y * c.width + x) * 4; if (d[i + 3] < 200) continue;
+      list.push([x - spec.anchor[0], y - spec.h / 2, '#' + [d[i], d[i + 1], d[i + 2]].map(v => v.toString(16).padStart(2, '0')).join('')]);
+    }
+    PIXELS.set(kind, list);
+  }
+  return list;
+}
+export function shatter(kind, x, y, s, power = 1) {
+  if (!MONSTERS[kind]) return;
+  for (const [px, py, color] of spritePixels(kind)) {
+    if (fx.parts.length > MAX_PARTS) break;
+    const vx = (px * 26 + (Math.random() - 0.5) * 240) * power, vy = (py * 22 - 260 - Math.random() * 260) * power;
+    fx.parts.push({ x: x + px * s, y: y + py * s, vx: vx * s / 4, vy: vy * s / 4, life: 0.55 + Math.random() * 0.45, t: 0, color, r: 2 * s, g: 1400 * s / 4, chunk: true });
+  }
+}
+
+// Soul orbs: a kill drops a few glowing orbs that arc back into the wizard who cast it. fx.onOrb(seat, i) fires
+// as each lands (index.html plays a rising chime).
+export function orbs(n, x, y, tx, ty, color, seat) {
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, v = 300 + Math.random() * 300;
+    fx.orbs.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, tx, ty, t: 0, delay: 0.12 + i * 0.06, color, seat, i, n });
+  }
+}
 
 export function burst(x, y, color, n = 18, speed = 420) {
   for (let i = 0; i < n; i++) {
@@ -35,7 +73,11 @@ export function burst(x, y, color, n = 18, speed = 420) {
   }
 }
 // popups are pixel-font text in the buffer: color is a font ink ('gold', 'red', …) or a hex; scale 1-3
-export function popup(x, y, text, color = 'white', scale = 1) { fx.pops.push({ x, y, text, color, scale, t: 0, life: 1 }); }
+// key: a new popup with the same key replaces the old one (a TRIPLE! replaces the DOUBLE! instead of piling up)
+export function popup(x, y, text, color = 'white', scale = 1, life = 1, key = null) {
+  if (key) fx.pops = fx.pops.filter(p => p.key !== key);
+  fx.pops.push({ x, y, text, color, scale, t: 0, life, key });
+}
 export function bolt(x, y) {
   const pts = [[x + (Math.random() - 0.5) * 60, 0]];
   for (let k = 1; k <= 9; k++) pts.push([x + (Math.random() - 0.5) * 80 * (1 - k / 10), (y * k) / 9]);
@@ -49,10 +91,23 @@ export function spell(token, from, to, color, enemyId) {
   fx.spells.push({ token, x0: from.x, y0: from.y, tx: to.x, ty: to.y, id: enemyId, color, t: 0, life: SPELL_TIME[token] || 0.13 });
 }
 // A monster that has just been killed: drawn white for a moment (until the spell gets there), then it bursts.
-export function dying(kind, x, y, delay = 0.13) { fx.dying.push({ kind, x, y, t: 0, life: delay }); }
+export function dying(kind, x, y, delay = 0.13, onPop = null, power = 1) { fx.dying.push({ kind, x, y, t: 0, life: delay, onPop, power }); }
 
 export function tickFx(dt, G, Lo) {
-  for (const p of fx.parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
+  for (const p of fx.parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= p.chunk ? 0.99 : 0.98; }
+  // orbs: a burst outward, then homing into the wizard, faster and faster
+  for (const o of fx.orbs) {
+    o.t += dt;
+    if (o.t < o.delay) { o.x += o.vx * dt; o.y += o.vy * dt; o.vx *= 0.9; o.vy *= 0.9; continue; }
+    const k = Math.min(1, (o.t - o.delay) * 3.2), dx = o.tx - o.x, dy = o.ty - o.y, d = Math.hypot(dx, dy);
+    const sp = 400 + 2600 * k * k;
+    if (d < sp * dt + 6) { o.done = true; for (let j = 0; j < 4; j++) P(o.tx, o.ty, j % 2 ? '#ffffff' : o.color, 6, (Math.random() - 0.5) * 300, -Math.random() * 300, 0.25, 600); if (fx.onOrb) fx.onOrb(o.seat, o.i, o.n); continue; }
+    o.vx = o.vx * (1 - k) + (dx / d) * sp * k; o.vy = o.vy * (1 - k) + (dy / d) * sp * k;
+    o.x += o.vx * dt; o.y += o.vy * dt;
+    if (Math.random() < 0.6) P(o.x, o.y, o.color, 5, 0, 0, 0.18);
+  }
+  fx.orbs = fx.orbs.filter(o => !o.done);
+  for (const k in fx.glow) fx.glow[k] = Math.max(0, fx.glow[k] - dt * 3);
   fx.parts = fx.parts.filter(p => p.t < p.life);
   for (const p of fx.pops) { p.t += dt; p.y -= 70 * dt; }
   fx.pops = fx.pops.filter(p => p.t < p.life);
@@ -71,7 +126,7 @@ export function tickFx(dt, G, Lo) {
   fx.spells = fx.spells.filter(s => !s.done);
   for (const d of fx.dying) {
     d.t += dt;
-    if (d.t >= d.life && !d.done) { d.done = true; burst(d.x, d.y, '#ffffff', 10, 320); burst(d.x, d.y, BODY[d.kind] || '#fff', 24, 520); }
+    if (d.t >= d.life && !d.done) { d.done = true; shatter(d.kind, d.x, d.y, Lo ? Lo.s : 4, d.power || 1); burst(d.x, d.y, '#ffffff', 8, 380); if (d.onPop) d.onPop(); }
   }
   fx.dying = fx.dying.filter(d => !d.done);
   fx.shake = Math.max(0, fx.shake - dt * 30);
@@ -213,6 +268,8 @@ export function drawField(ctx, G, view) {
       fx.parts.push({ x: (x + (Math.random() - 0.5) * 12) * s, y: (wy - 6) * s, vx: (Math.random() - 0.5) * 40, vy: -120 - Math.random() * 120, life: 0.5, t: 0, color: Math.random() < 0.5 ? '#ffb02e' : '#ff5a3c', r: 4 + Math.random() * 4, g: -100 });
     }
     if (p.super >= 1) { b.globalAlpha = 0.35 + Math.sin(t * 8) * 0.15; b.fillStyle = color; b.fillRect(x - 11, wy - 26, 22, 26); b.globalAlpha = 1; }
+    const gl = fx.glow[seat] || 0; // a flash as soul orbs arrive
+    if (gl > 0) { b.globalAlpha = Math.min(0.8, gl); b.fillStyle = '#ffffff'; b.fillRect(x - 9, wy - 24, 18, 24); b.globalAlpha = 1; }
     b.globalAlpha = view.live(seat) ? 1 : 0.4;
     draw(b, wizard, f, x, wy + 1 - Math.round(lunge * 2), { opts: color, key: color, flip: tx < x - 2 });
     b.globalAlpha = 1;
@@ -232,14 +289,17 @@ export function drawField(ctx, G, view) {
     if (Math.random() < 0.25) continue; // flicker
     for (let k = 1; k < bo.pts.length; k++) pixLine(b, B(bo.pts[k - 1][0]), B(bo.pts[k - 1][1]), B(bo.pts[k][0]), B(bo.pts[k][1]), k % 2 ? '#ffffff' : '#cfe6ff', 2);
   }
+  for (const o of fx.orbs) { const x = B(o.x), y = B(o.y); b.fillStyle = o.color; b.fillRect(x - 2, y - 1, 4, 2); b.fillRect(x - 1, y - 2, 2, 4); b.fillStyle = '#ffffff'; b.fillRect(x - 1, y - 1, 2, 2); }
   for (const p of fx.parts) {
-    if (p.t / p.life > 0.7 && Math.random() < 0.5) continue; // fizzle out instead of fading
+    if (!p.chunk && p.t / p.life > 0.7 && Math.random() < 0.5) continue; // fizzle out instead of fading
+    if (p.chunk && p.t / p.life > 0.8 && Math.random() < 0.4) continue;
     const r = Math.max(1, Math.round(p.r / s * (1 - p.t / p.life * 0.5)));
     b.fillStyle = p.color; b.fillRect(B(p.x) - (r >> 1), B(p.y) - (r >> 1), r, r);
   }
 
   // popups, in the pixel font
-  for (const p of fx.pops) drawText(b, p.text, B(p.x), B(p.y), { color: p.color, scale: p.scale, alpha: Math.min(1, 2 * (1 - p.t / p.life)) });
+  // popups jump in a size bigger, then settle
+  for (const p of fx.pops) drawText(b, p.text, B(p.x), B(p.y), { color: p.color, scale: p.scale + (p.t < 0.09 ? 1 : 0), alpha: Math.min(1, 2 * (1 - p.t / p.life)) });
   for (let i = 0; i < G.lanes.length; i++) if (G.players[G.lanes[i]].super >= 1 && Math.sin(t * 6) > -0.3) drawText(b, 'TAP!', Lb.laneX(i), Lb.bh - 15, { color: 'gold' });
 
   // HUD in pixels: wave, freeze timer, hearts and the team frenzy bar

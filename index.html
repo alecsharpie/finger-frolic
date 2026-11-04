@@ -69,8 +69,8 @@
 import { hostRoom, param } from './shared/net.js';
 import { findLan, joinUrl, qrSvg, stuckOnLocalhost } from './shared/lobby.js';
 import { Sfx } from './shared/audio.js';
-import { SEATS, KINDS, INTRO, DIFFS, DIFF_KEYS, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, awards, need, aim, isBossWave, isShapeToken } from './game.js';
-import { drawField, tickFx, warmUp, fx, burst, popup, spell, dying, bolt, seatColor, BODY } from './draw.js';
+import { SEATS, KINDS, INTRO, DIFFS, DIFF_KEYS, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, awards, need, aim, isBossWave, isShapeToken, MULTI_NAMES } from './game.js';
+import { drawField, tickFx, warmUp, fx, burst, popup, spell, dying, bolt, hitStop, orbs, seatColor, BODY } from './draw.js';
 import { SHAPES } from './shared/shapes.js';
 import { pic, ptext } from './shared/ui.js';
 import { DIFF_ICON, AWARD_ICON } from './icons.js';
@@ -153,6 +153,7 @@ function drainLog() {
       const [lane, id, token, from, ey0] = a, seat = G.lanes[from], p = G.players[seat];
       const hx = Lo.laneX(from), hy = Lo.wall, tx = Lo.laneX(lane), ey = Lo.yOf(ey0);
       spell(token, { x: hx + 7 * Lo.s, y: Lo.wall - 18 * Lo.s }, { x: tx, y: ey }, seatColor(seat), id);
+      burst(hx + 7 * Lo.s, Lo.wall - 20 * Lo.s, seatColor(seat), 5, 220);
       spellFor[id] = token;
       if (isShapeToken(token)) { popup(tx, ey - H * 0.15, SHAPE_SPELL[token], 'violet', 2); sfx.cast(token); }
       if (lane !== from) popup(tx, hy - H * 0.16, 'HELP!', seatColor(seat), 1);
@@ -162,19 +163,37 @@ function drainLog() {
     } else if (k === 'miss') {
       const [lane] = a; sfx.wrong(); popup(Lo.laneX(lane), Lo.wall - H * 0.1, 'DIZZY', 'gold', 1);
     } else if (k === 'kill') {
-      const [lane, id, kind, y, how] = a, ey = Lo.yOf(y);
+      const [lane, id, kind, y, how, killer] = a, ey = Lo.yOf(y);
       if (kind === 'boss') {
         sfx.boom(); fx.shake = 30; fx.flash = 1; fx.flashColor = '#ffd23f';
         for (let i = 0; i < G.lanes.length; i++) burst(Lo.laneX(i), ey, '#ffd23f', 40, 700);
         banner('BOSS DOWN!', 'gold', `${pic('crown', 28)} +${KINDS.boss.points} each, and a heart back`, 2.5);
       } else {
-        // the monster flashes until the spell that killed it lands, then bursts
-        const delay = how === 'swipe' ? ({ circle: 0.28, tri: 0.3, square: 0.32, zig: 0.34, v: 0.3 }[spellFor[id]] || 0.13) : 0.02;
+        // the monster flashes until the spell that killed it lands, then bursts into its own pixels; the game holds
+        // still for a beat, and soul orbs fly home to whoever cast it
+        const tok = spellFor[id], big = isShapeToken(tok) || kind === 'golem' || kind === 'brute';
+        const delay = how === 'swipe' ? ({ circle: 0.28, tri: 0.3, square: 0.32, zig: 0.34, v: 0.3 }[tok] || 0.13) : 0.02;
         delete spellFor[id];
-        dying(kind, Lo.laneX(lane), ey, delay);
-        setTimeout(() => { sfx.splat(); fx.shake = Math.max(fx.shake, 4); }, delay * 1000);
-        popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points * (G.frenzyT > 0 ? 2 : 1), G.frenzyT > 0 ? 'flame' : 'white', 1);
+        const ci = G.lanes.indexOf(killer), mx = Lo.laneX(lane);
+        dying(kind, mx, ey, delay, () => {
+          sfx.splat(); fx.shake = Math.max(fx.shake, big ? 10 : 5); hitStop(big ? 0.08 : 0.045);
+          if (ci >= 0) orbs(Math.max(3, Math.min(8, Math.round(KINDS[kind].points / 30))), mx, ey, Lo.laneX(ci), Lo.wall - 10 * Lo.s, seatColor(killer), killer);
+        }, big ? 1.4 : 1);
+        if (how !== 'mega') popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points * (G.frenzyT > 0 ? 2 : 1), G.frenzyT > 0 ? 'flame' : 'white', 1);
       }
+    } else if (k === 'multi') {
+      const [seat, n] = a, i = G.lanes.indexOf(seat);
+      if (i >= 0) popup(Lo.laneX(i), Lo.wall - H * 0.2, MULTI_NAMES[n], n >= 4 ? 'flame' : 'gold', n >= 3 ? 3 : 2, 1.2, 'multi' + seat);
+      sfx.multi(n);
+    } else if (k === 'close') {
+      const [lane, seat] = a;
+      popup(Lo.laneX(lane), Lo.wall - H * 0.12, 'CLOSE CALL!', 'gold', 2, 1.3, 'close' + lane); popup(Lo.laneX(lane), Lo.wall - H * 0.07, '+100', 'gold', 1, 1.3);
+      hitStop(0.14); fx.flash = 0.5; fx.flashColor = '#ffe14d'; sfx.close();
+    } else if (k === 'mega') {
+      fx.pops = []; // the mega spell gets the screen to itself
+      hitStop(0.3); fx.shake = 34; fx.flash = 1; fx.flashColor = '#c69cff'; sfx.mega();
+      for (let i = 0; i < G.lanes.length; i++) bolt(Lo.laneX(i), Lo.wall - 40 * Lo.s);
+      banner('MEGA SPELL!', 'violet', `${pic('sparkle', 28)} Every wizard at once. The whole field, gone.`, 2.8);
     } else if (k === 'gift') {
       sfx.chime(); popup(Lo.laneX(a[0]), Lo.top + H * 0.14, 'GIFT!', 'gold', 1);
     } else if (k === 'escape') {
@@ -218,6 +237,7 @@ function drainLog() {
   }
 }
 let baseBpm = 120;
+fx.onOrb = (seat, i, n) => { sfx.pling(i); if (i === n - 1) fx.glow[seat] = 1; };
 const spellFor = {}; // enemy id -> the token of the last spell cast at it
 const SHAPE_SPELL = { circle: 'FIREBALL!', tri: 'LIGHTNING!', square: 'ICE CAGE!', zig: 'WHIRLWIND!', v: 'SMITE!' };
 
@@ -236,7 +256,7 @@ const HOW = `
   <div class="how">
     <div><h3>${pic('wand', 30)} Swipe to cast</h3>Swipe the arrows over the monster in your lane, in order. Every swipe fires a spell. Wrong way and you're dizzy.</div>
     <div><h3>${pic('pencil', 30)} Draw the runes</h3>Purple runes need a shape. Draw it on your phone in one stroke.<div class="runes">${['circle', 'tri', 'v', 'square', 'zig'].map(rune).join('')}</div></div>
-    <div><h3>${pic('shield', 30)} Mind your friends</h3>Lane clear? Your spells fly to the lanes beside you. Fill your own meter, then tap for a super.</div>
+    <div><h3>${pic('shield', 30)} Mind your friends</h3>Lane clear? Your spells fly to the lanes beside you. Fill your meter and tap for a super. All tap together for a mega spell.</div>
     <div><h3>${pic('gift', 30)} Gifts and frenzy</h3>Pop gifts for a freeze, a heart or a lightning storm. Teamwork fills the frenzy meter: double points.</div>
   </div>`;
 
@@ -334,8 +354,8 @@ function snapshot() {
     const award = over && A[s] ? [A[s].icon, A[s].title, A[s].why] : null;
     // draw: the next thing this player has to do is draw a shape, so the phone switches to drawing
     const draw = a && isShapeToken(need(a.e, a.lane)) ? 1 : 0;
-    p[s] = q ? [q.score, q.combo, Math.round(q.super * 100), q.stun > 0 ? 1 : 0, q.ev, q.last, lane, ready.has(s) ? 1 : 0, nameOf(s), at, award, draw]
-             : [0, 0, 0, 0, 0, '', -1, ready.has(s) ? 1 : 0, nameOf(s), 2, null, 0];
+    p[s] = q ? [q.score, q.combo, Math.round(q.super * 100), q.stun > 0 ? 1 : 0, q.ev, q.last, lane, ready.has(s) ? 1 : 0, nameOf(s), at, award, draw, q.chain >= 2 && G.t - q.lastKill < 1.5 ? q.chain : 0, q.saves]
+             : [0, 0, 0, 0, 0, '', -1, ready.has(s) ? 1 : 0, nameOf(s), 2, null, 0, 0, 0];
   }
   const rank = over ? ranking(G).map(([s]) => s) : null;
   return { t: 's', ph: phase, w: G.wave, h: G.hearts, cd: Math.ceil(mode === 'countdown' ? countdown : G.phase === 'break' ? G.timer : 0), n: present().length, p, rank,
@@ -358,6 +378,8 @@ const perf = []; // ms of work per frame, for ?debug
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const work0 = performance.now();
+  // hit-stop: rules and effects hold still for a beat on a big hit (the screen still shakes)
+  let gdt = dt; if (fx.stop > 0) { fx.stop -= dt; gdt = 0; fx.shake = Math.max(0, fx.shake - dt * 30); }
   const here = present();
 
   // seats whose phone has been gone a while are freed in the lobby, so the list shows who is really here
@@ -381,7 +403,7 @@ function frame(now) {
     }
   } else if (mode === 'play') {
     const before = G.phase, ev = G.lanes.map(s => G.players[s]?.stun > 0);
-    step(G, dt, live);
+    step(G, gdt, live);
     const modes = G.lanes.map((_, i) => { const a = aim(G, i); return a && isShapeToken(need(a.e, a.lane)) ? 1 : 0; }).join('');
     if (modes !== lastModes) { lastModes = modes; dirty = true; }
     if (G.lanes.some((s, i) => (G.players[s].stun > 0) !== ev[i])) dirty = true;
@@ -390,7 +412,7 @@ function frame(now) {
     drainLog();
   }
 
-  tickFx(dt, G, Lo);
+  tickFx(gdt, G, Lo);
   Lo = drawField(ctx, G, { W: cv.width, H: cv.height, live: s => mode !== 'play' || live(s), name: nameOf, maxHearts: DIFFS[G.diff]?.hearts });
   if (mode === 'lobby' || G.phase === 'over') drainLog();
   const b = $('banner'); b.style.opacity = now < bannerUntil ? 1 : 0;
