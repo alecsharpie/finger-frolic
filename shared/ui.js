@@ -31,13 +31,13 @@ export function picture(name) {
 // <img> of a picture at a whole-number scale (so pixels stay square): `px` is the wanted height in CSS pixels.
 export function pic(name, px = 32, cls = '') {
   const u = toURL('p:' + name, () => picture(name)), k = Math.max(1, Math.round(px / u.h));
-  return `<img class="px ${cls}" src="${u.url}" width="${u.w * k}" height="${u.h * k}" alt="">`;
+  return `<img class="px ${cls}" src="${u.url}" width="${u.w * k}" height="${u.h * k}" alt="" draggable="false">`;
 }
 
 // <img> of a line of pixel-font text, `px` tall (rounded to whole pixels of the font).
 export function ptext(str, px = 40, color = 'white', cls = '') {
   const u = toURL('t:' + str + '|' + color, () => textCanvas(str, color)), k = Math.max(1, Math.round(px / u.h));
-  return `<img class="px ptext ${cls}" src="${u.url}" width="${u.w * k}" height="${u.h * k}" alt="${String(str).replace(/"/g, '')}">`;
+  return `<img class="px ptext ${cls}" src="${u.url}" width="${u.w * k}" height="${u.h * k}" alt="${String(str).replace(/"/g, '')}" draggable="false">`;
 }
 
 export const PIXEL_CSS = `

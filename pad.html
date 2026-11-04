@@ -265,6 +265,8 @@ const up = e => {
 addEventListener('pointerup', up); addEventListener('pointercancel', e => touches.delete(e.pointerId));
 document.addEventListener('touchmove', e => { if (!e.target.closest('input')) e.preventDefault(); }, { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
+// no image drags, text selection or long-press menus mid-swipe
+for (const ev of ['dragstart', 'selectstart', 'contextmenu']) document.addEventListener(ev, e => { if (!e.target.closest('input')) e.preventDefault(); });
 
 // keys, for testing on a laptop: arrows swipe, space taps, 1-5 draw circle, triangle, check, square, zigzag
 const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap', 1: 'circle', 2: 'tri', 3: 'v', 4: 'square', 5: 'zig' };
