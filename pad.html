@@ -51,11 +51,14 @@
   .tbar { height: 8px; border-radius: 4px; background: rgba(0,0,0,.35); overflow: hidden; margin-top: 8px; }
   .tbar i { display: block; height: 100%; width: 0; background: #ff8a3c; transition: width .2s; }
   body.frenzy .tbar i { background: #fff; }
+  #ink { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5; }
+  body.draw .zone { border-style: solid; border-color: #b98cff; background: rgba(138, 77, 255, .14); }
   .shake { animation: shake .3s; }
   @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-10px) rotate(-2deg); } 75% { transform: translateX(10px) rotate(2deg); } }
 </style>
 </head>
 <body>
+<canvas id="ink"></canvas>
 <div id="join" class="form">
   <h1>Finger <span>Frolic</span></h1>
   <input id="name" maxlength="12" placeholder="Your name" autocomplete="nickname" enterkeyhint="go">
@@ -73,6 +76,7 @@
 <script type="module">
 import { joinRoom, param, load, save } from './shared/net.js';
 import { seatColor } from './draw.js';
+import { classify, SHAPES } from './shared/shapes.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -115,6 +119,7 @@ function render() {
   $('meter').classList.toggle('full', sup >= 100);
   $('mtext').textContent = sup >= 100 ? 'TAP FOR SUPER!' : 'SUPER';
   document.body.classList.toggle('stun', !!(me && me[3]));
+  document.body.classList.toggle('draw', !!(me && me[11] && ph === 'wave'));
   document.body.classList.toggle('frenzy', !!(S && S.fr > 0 && ph === 'wave'));
   document.body.classList.toggle('ice', !!(S && S.ice > 0 && ph === 'wave'));
   $('tfill').style.width = (S ? (S.fr > 0 ? S.fr / 8 * 100 : S.fz) : 0) + '%';
@@ -134,15 +139,17 @@ function render() {
     msg = me && me[7]
       ? `${head}✓ Ready!<small>waiting for the others (${Object.values(S.p).filter(p => p[7]).length}/${S.n})</small>`
       : `${head}Swipe <span style="color:var(--c)">UP</span><br>when you're ready<small>${ph === 'over' ? 'to play again' : 'everyone swipes up to start'}</small>`;
+    if (S.diff) msg += `<small style="margin-top:22px">${esc(S.diff)}<br>swipe ← → to change difficulty</small>`;
   }
   else if (ph === 'countdown') msg = `<div class="num">${S.cd || 'GO'}</div>`;
   else if (me && me[6] < 0) msg = `You're in!<small>${ph === 'break' ? 'joining the wall now' : 'you join at the next wave, get ready'}</small>`;
   else if (me && me[3]) msg = '💫 Dizzy!<small>wrong way, hold on</small>';
   else if (ph === 'break') msg = `Wave cleared!<small>next one in ${S.cd}…</small>`;
+  else if (me && me[11]) msg = '✏️ DRAW IT!<small>draw the purple rune\'s shape on the TV, in one stroke</small>';
   else if (sup >= 100) msg = '⚡ TAP! ⚡<small>for a super that clears your lane</small>';
   else if (me && me[9] === 1) msg = '🤝 Helping!<small>your lane is clear, so you are swiping your neighbour\'s monster</small>';
   else if (me && me[9] === 2) msg = 'Lane clear 😎<small>get ready… you\'ll help a neighbour when theirs gets close</small>';
-  else msg = S.fr > 0 ? '🔥 FRENZY! 🔥<small>double points, go go go</small>' : 'Swipe!<small>match the arrows over the monster in your lane</small>';
+  else msg = S.fr > 0 ? '🔥 FRENZY! 🔥<small>double points, go go go</small>' : 'Swipe!<small>swipe the arrows over the monster in your lane to cast</small>';
   if ($('msg').innerHTML !== msg) $('msg').innerHTML = msg;
 }
 
@@ -168,27 +175,58 @@ function feel() {
   if (prev && prev.ph !== S.ph && S.ph === 'wave') buzz([30, 60, 30]);
 }
 
-// ---------- swipes ----------
+// ---------- swipes and drawings ----------
 const ARROW = { u: '⬆', d: '⬇', l: '⬅', r: '➡' }, OFF = { u: [0, -60], d: [0, 60], l: [-60, 0], r: [60, 0] };
 function send(s) {
   if (!net) return;
   net.act({ s });
   if (s === 'tap') { buzz(15); return; }
-  buzz(6);
+  buzz(SHAPES[s] ? [10, 20, 10] : 6);
   const f = $('flash');
-  f.textContent = ARROW[s]; f.style.setProperty('--dx', OFF[s][0] + 'px'); f.style.setProperty('--dy', OFF[s][1] + 'px');
+  f.textContent = ARROW[s] || SHAPES[s].icon; const o = OFF[s] || [0, -40];
+  f.style.setProperty('--dx', o[0] + 'px'); f.style.setProperty('--dy', o[1] + 'px');
   f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
 }
 
-// A swipe fires as soon as the finger has moved far enough, not on release, so it feels instant. One per touch.
+// Two ways a touch can go:
+// - swiping (normal): fires as soon as the finger has moved far enough, so it feels instant. One per touch.
+// - drawing (the TV says the next thing you need is a shape): the stroke is traced on screen and read on release
+//   by shared/shapes.js; a straight stroke still counts as a swipe, a scribble asks you to try again.
+// The mode is checked when the finger first moves, not when it lands, so it is as fresh as possible.
+const drawing = () => !!(mine() && mine()[11]);
 const touches = new Map();
 const MIN = 26, TAP = 14;
+const ink = $('ink'), ictx = ink.getContext('2d');
+function sizeInk() { const r = devicePixelRatio || 1; ink.width = innerWidth * r; ink.height = innerHeight * r; ictx.setTransform(r, 0, 0, r, 0, 0); }
+addEventListener('resize', sizeInk); sizeInk();
+let fade = 0;
+function trace(pts, color, alpha = 1) {
+  ictx.clearRect(0, 0, innerWidth, innerHeight);
+  if (pts.length < 2) return;
+  ictx.globalAlpha = alpha; ictx.lineCap = ictx.lineJoin = 'round';
+  for (const [w, c] of [[16, color], [6, '#ffffff']]) {
+    ictx.lineWidth = w; ictx.strokeStyle = c; ictx.shadowColor = color; ictx.shadowBlur = w === 16 ? 18 : 0;
+    ictx.beginPath(); pts.forEach(([x, y], i) => (i ? ictx.lineTo(x, y) : ictx.moveTo(x, y))); ictx.stroke();
+  }
+  ictx.globalAlpha = 1; ictx.shadowBlur = 0;
+}
+function fadeOut(pts, color) {
+  cancelAnimationFrame(fade); const t0 = performance.now();
+  const go = () => { const k = 1 - (performance.now() - t0) / 350; if (k <= 0) { ictx.clearRect(0, 0, innerWidth, innerHeight); return; } trace(pts, color, k); fade = requestAnimationFrame(go); };
+  go();
+}
+const color = () => getComputedStyle(document.body).getPropertyValue('--c').trim() || '#ffd23f';
+
 addEventListener('pointerdown', e => {
   if (!net || e.target.closest('input,button')) return;
-  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), done: false });
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), done: false, mode: null, pts: [[e.clientX, e.clientY]] });
 }, { passive: true });
 addEventListener('pointermove', e => {
   const s = touches.get(e.pointerId); if (!s || s.done) return;
+  const pts = e.getCoalescedEvents ? e.getCoalescedEvents().map(c => [c.clientX, c.clientY]) : [[e.clientX, e.clientY]];
+  s.pts.push(...(pts.length ? pts : [[e.clientX, e.clientY]]));
+  if (s.mode === null && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 4) s.mode = drawing() ? 'draw' : 'swipe';
+  if (s.mode === 'draw') { cancelAnimationFrame(fade); trace(s.pts, color()); return; }
   const dx = e.clientX - s.x, dy = e.clientY - s.y;
   if (Math.hypot(dx, dy) < MIN) return;
   s.done = true;
@@ -197,14 +235,24 @@ addEventListener('pointermove', e => {
 const up = e => {
   const s = touches.get(e.pointerId); touches.delete(e.pointerId);
   if (!s || s.done) return;
+  if (s.mode === 'draw') {
+    s.pts.push([e.clientX, e.clientY]);
+    const c = classify(s.pts);
+    fadeOut(s.pts, c.type === 'shape' ? color() : '#888');
+    if (c.type === 'shape') send(c.name);
+    else if (c.type === 'swipe') send(c.dir);
+    else if (c.type === 'tap') send('tap');
+    else { shout('🤔 try again', '#fff'); buzz([20, 40, 20]); }
+    return;
+  }
   if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < TAP && performance.now() - s.t < 400) send('tap');
 };
 addEventListener('pointerup', up); addEventListener('pointercancel', e => touches.delete(e.pointerId));
 document.addEventListener('touchmove', e => { if (!e.target.closest('input')) e.preventDefault(); }, { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
 
-// keys, for testing on a laptop
-const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap' };
+// keys, for testing on a laptop: arrows swipe, space taps, 1-5 draw ○ △ ✓ □ Z
+const KEY = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', w: 'u', s: 'd', a: 'l', d: 'r', ' ': 'tap', 1: 'circle', 2: 'tri', 3: 'v', 4: 'square', 5: 'zig' };
 addEventListener('keydown', e => { if (net && KEY[e.key] && !e.repeat && !e.target.closest('input')) { e.preventDefault(); send(KEY[e.key]); } });
 if (param('auto') != null) start();
 window.frolicPad = { send, get seat() { return seat; } }; // dev.html drives this for bots

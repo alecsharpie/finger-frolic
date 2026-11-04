@@ -179,3 +179,14 @@ Object.assign(Sfx.prototype, {
   zap() { this.noise(0.5, { vol: 0.6, freq: 3000, slide: 200, type: 'bandpass', q: 0.7 }); this.tone(1200, 0.3, { type: 'sawtooth', vol: 0.12, slide: 60 }); this.bomb(); },
   frenzy() { [392, 494, 587, 784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.14, { type: 'square', vol: 0.09, delay: i * 0.045 })); this.whoosh(); },
 });
+
+// spells: one sound per drawn shape
+Object.assign(Sfx.prototype, {
+  cast(shape) {
+    if (shape === 'circle') { this.noise(0.5, { vol: 0.35, freq: 600, slide: 3000, type: 'bandpass', q: 1 }); this.tone(220, 0.4, { type: 'sawtooth', vol: 0.08, slide: 440 }); }
+    else if (shape === 'tri') this.zap();
+    else if (shape === 'square') this.freeze();
+    else if (shape === 'zig') { this.noise(0.6, { vol: 0.25, freq: 300, slide: 2400, type: 'bandpass', q: 4 }); this.whoosh(); }
+    else if (shape === 'v') { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'sine', vol: 0.12, delay: i * 0.04 })); }
+  },
+});

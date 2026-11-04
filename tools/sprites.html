@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finger Frolic · Sprites</title>
+<link rel="stylesheet" href="../shared/theme.css">
+<style>
+  /* Contact sheet for every sprite (after ~/me/aoe's sprite lab): each frame large, then the variants used in
+     play, then 1× on the field the way the TV shows them. ?scale=N sets the zoom. */
+  body { padding: 16px; height: auto; }
+  h2 { margin: 18px 0 6px; font-size: 16px; color: var(--ink-2); }
+  .row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-2); }
+  canvas { image-rendering: pixelated; background: #2b5d3c; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1 style="margin:0">Finger Frolic sprites</h1>
+<div id="out"></div>
+<script type="module">
+import { frame, cacheSize } from '../shared/pix.js';
+import { ALL, MONSTERS, wizard, chip, GLYPH } from '../sprites.js';
+import { COLORS } from '../draw.js';
+const S = +new URLSearchParams(location.search).get('scale') || 5, out = document.getElementById('out');
+function show(row, c, label, s = S, bg) {
+  const v = document.createElement('canvas'); v.width = c.width * s; v.height = c.height * s;
+  const x = v.getContext('2d'); x.imageSmoothingEnabled = false; if (bg) { x.fillStyle = bg; x.fillRect(0, 0, v.width, v.height); } x.drawImage(c, 0, 0, v.width, v.height);
+  const cell = document.createElement('div'); cell.className = 'cell'; cell.append(v, label); row.append(cell);
+}
+function section(title) { const h = document.createElement('h2'); h.textContent = title; const r = document.createElement('div'); r.className = 'row'; out.append(h, r); return r; }
+const t0 = performance.now();
+for (const spec of [...Object.values(MONSTERS), ALL.wyrmHead, ALL.wyrmSeg]) {
+  const r = section(`${spec.id}  ${spec.w}×${spec.h}`);
+  for (let f = 0; f < spec.frames; f++) show(r, frame(spec, f), 'frame ' + f);
+  show(r, frame(spec, 0, 'flash'), 'hit'); show(r, frame(spec, 0, 'ice'), 'frozen');
+  show(r, frame(spec, 0), '1×', 1); show(r, frame(spec, 0), '3×', 3);
+}
+const w = section('wizard: idle, idle, cast, dizzy · one per player colour');
+for (const c of COLORS) for (let f = 0; f < 4; f++) show(w, frame(wizard, f, 'normal', c, c), f ? '' : c, 4);
+const ch = section('chips');
+for (const g of Object.keys(GLYPH)) { const kind = 'udlr'.includes(g) ? 'arrow' : 'shape'; show(ch, frame(chip, 0, 'normal', { kind, glyph: g }, kind + g), g, 4); }
+show(ch, frame(chip, 0, 'normal', { kind: 'trick', glyph: 'u' }, 'tricku'), 'trick', 4);
+const hr = section('heart'); show(hr, frame(ALL.heart, 0), 'full', 6); show(hr, frame(ALL.heart, 1), 'empty', 6);
+document.title += ` · ${cacheSize()} frames in ${(performance.now() - t0).toFixed(1)} ms`;
+document.body.insertAdjacentHTML('beforeend', `<p style="color:var(--ink-2)">${cacheSize()} frames baked in ${(performance.now() - t0).toFixed(1)} ms</p>`);
+</script>
+</body>
+</html>

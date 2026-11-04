@@ -33,6 +33,9 @@
   .rank td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
   .rank td.n { width: 1%; white-space: nowrap; font-weight: 900; }
   .rank td.s { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .diffs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: -1vh 0 2vh; }
+  .diffs .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .diffs .hint { color: var(--ink-2); font-size: 14px; }
   .rank small { color: var(--ink-2); font-weight: 600; font-size: .7em; }
   .rank .award { margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--bg-2); font-size: .8em; font-weight: 800; }
   #banner { position: fixed; left: 0; right: 0; top: 36vh; text-align: center; pointer-events: none; font-size: clamp(48px, 12vh, 140px); font-weight: 900; color: #fff; text-shadow: 0 6px 0 rgba(20,10,40,.6), 0 0 40px rgba(0,0,0,.4); }
@@ -56,15 +59,19 @@
 import { hostRoom, param } from './shared/net.js';
 import { findLan, joinUrl, qrSvg, stuckOnLocalhost } from './shared/lobby.js';
 import { Sfx } from './shared/audio.js';
-import { SEATS, KINDS, INTRO, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, awards, need, aim, isBossWave } from './game.js';
-import { drawField, tickFx, fx, burst, popup, slash, bolt, seatColor, BODY } from './draw.js';
+import { SEATS, KINDS, INTRO, DIFFS, DIFF_KEYS, newGame, addPlayer, startGame, startWave, step, swipe, breakOver, ranking, awards, need, aim, isBossWave, isShapeToken } from './game.js';
+import { drawField, tickFx, warmUp, fx, burst, popup, spell, dying, bolt, seatColor, BODY } from './draw.js';
+import { SHAPES } from './shared/shapes.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const cv = $('cv'), ctx = cv.getContext('2d');
 const sfx = new Sfx();
 
-let G = newGame();
+let diff = DIFF_KEYS.includes(param('diff')) ? param('diff') : (localStorage.getItem('frolic-diff') || 'normal');
+if (!DIFFS[diff]) diff = 'normal';
+let G = newGame(undefined, diff);
+warmUp();
 let mode = 'lobby';         // lobby | countdown | play (then G.phase says wave / break / over)
 let countdown = 0, bannerUntil = 0, overAt = 0;
 const ready = new Set();
@@ -93,12 +100,20 @@ function onAction(seat, body) {
     // a grace period on the results, so a last frantic swipe up does not skip them
     if (G.phase === 'over' && performance.now() - overAt < 3000) return;
     if (body.s === 'u' && !ready.has(seat)) { ready.add(seat); sfx.tick(); dirty = true; renderOverlays(); maybeStart(); }
+    if (body.s === 'l' || body.s === 'r') setDiff(body.s === 'r' ? 1 : -1);
     return;
   }
   if (mode !== 'play') return;
   const res = swipe(G, seat, body.s);
   if (res) dirty = true;
   drainLog();
+}
+
+function setDiff(step, to) {
+  const i = DIFF_KEYS.indexOf(diff);
+  diff = to || DIFF_KEYS[Math.max(0, Math.min(DIFF_KEYS.length - 1, i + step))];
+  try { localStorage.setItem('frolic-diff', diff); } catch (e) {}
+  G.diff = diff; sfx.tick(); dirty = true; renderOverlays();
 }
 
 function maybeStart() {
@@ -122,9 +137,12 @@ function drainLog() {
   for (const [k, ...a] of G.log.splice(0)) {
     if (k === 'hit') {
       // lane: whose arrows were hit; from: the lane of the player who swiped (different when helping a neighbour)
-      const [lane, id, , from] = a, e = G.enemies.find(x => x.id === id), seat = G.lanes[from], p = G.players[seat];
-      const hx = Lo.laneX(from), hy = Lo.wall, tx = Lo.laneX(lane);
-      if (e) { const ey = Lo.yOf(e.y); slash(hx, hy, tx + (Math.random() - 0.5) * 30, ey, seatColor(seat)); burst(tx, ey - 30, seatColor(seat), 8, 260); }
+      // lane: whose arrows were hit; from: the caster's lane (different when helping a neighbour)
+      const [lane, id, token, from, ey0] = a, seat = G.lanes[from], p = G.players[seat];
+      const hx = Lo.laneX(from), hy = Lo.wall, tx = Lo.laneX(lane), ey = Lo.yOf(ey0);
+      spell(token, { x: hx + 7 * Lo.s, y: Lo.wall - 18 * Lo.s }, { x: tx, y: ey }, seatColor(seat), id);
+      spellFor[id] = token;
+      if (isShapeToken(token)) { popup(tx, ey - H * 0.15, SHAPE_SPELL[token], '#e9d8ff', H * 0.035); sfx.cast(token); }
       if (lane !== from) popup(tx, hy - H * 0.16, `${nameOf(seat)} helps!`, seatColor(seat), H * 0.03);
       fx.lunge[seat] = 1;
       sfx.slash(p.combo);
@@ -132,15 +150,17 @@ function drainLog() {
     } else if (k === 'miss') {
       const [lane] = a; sfx.wrong(); popup(Lo.laneX(lane), Lo.wall - H * 0.1, 'dizzy!', '#ffe14d', H * 0.035);
     } else if (k === 'kill') {
-      const [lane, , kind, y, how] = a, ey = Lo.yOf(y);
+      const [lane, id, kind, y, how] = a, ey = Lo.yOf(y);
       if (kind === 'boss') {
         sfx.boom(); fx.shake = 30; fx.flash = 1; fx.flashColor = '#ffd23f';
         for (let i = 0; i < G.lanes.length; i++) burst(Lo.laneX(i), ey, '#ffd23f', 40, 700);
         banner(`👑 BOSS DOWN!<small>+${KINDS.boss.points} each and a heart back</small>`, 2.5);
       } else {
-        if (how !== 'storm') sfx.splat();
-        fx.shake = Math.max(fx.shake, 4);
-        burst(Lo.laneX(lane), ey, '#ffffff', 10, 300); burst(Lo.laneX(lane), ey, BODY[kind] || '#fff', 22, 480);
+        // the monster flashes until the spell that killed it lands, then bursts
+        const delay = how === 'swipe' ? ({ circle: 0.28, tri: 0.3, square: 0.32, zig: 0.34, v: 0.3 }[spellFor[id]] || 0.13) : 0.02;
+        delete spellFor[id];
+        dying(kind, Lo.laneX(lane), ey, delay);
+        setTimeout(() => { sfx.splat(); fx.shake = Math.max(fx.shake, 4); }, delay * 1000);
         popup(Lo.laneX(lane), ey - H * 0.06, '+' + KINDS[kind].points * (G.frenzyT > 0 ? 2 : 1), G.frenzyT > 0 ? '#ffb02e' : '#fff', H * 0.035);
       }
     } else if (k === 'gift') {
@@ -184,13 +204,15 @@ function drainLog() {
   }
 }
 let baseBpm = 120;
+const spellFor = {}; // enemy id → the token of the last spell cast at it
+const SHAPE_SPELL = { circle: '🔥 Fireball!', tri: '⚡ Lightning!', square: '🧊 Ice cage!', zig: '🌪️ Whirlwind!', v: '✨ Smite!' };
 
 function banner(html, secs) { $('banner').innerHTML = html; bannerUntil = performance.now() + secs * 1000; }
 
 // ---------- the TV's overlays ----------
 const HOW = `
   <div class="how">
-    <div><b>👆 Swipe the arrows</b>Each monster in your lane carries arrows. Swipe them on your phone, in order. Every hit knocks it back. Wrong way = dizzy!</div>
+    <div><b>🪄 Swipe to cast</b>Swipe the arrows over the monster in your lane, in order: each one fires a spell. Purple runes? <i>Draw</i> that shape on your phone (○ △ ✓ □ Z). Wrong = dizzy!</div>
     <div><b>🤝 Lane clear? Help out</b>When your lane is empty, your swipes hit the closest monster in the lanes next to you.</div>
     <div><b>🎁 Pop the gifts</b>Golden boxes drop power-ups for everyone: ❄️ freeze, ❤️ a heart, or ⚡ lightning down every lane.</div>
     <div><b>🔥 Frenzy &amp; supers</b>Team swipes fill the FRENZY meter: double points! Fill your own meter, then tap for a super. Every 5th wave: a boss.</div>
@@ -200,6 +222,11 @@ function playersHtml(showReady) {
   const seats = SEATS.filter(s => room.seat(s));
   if (!seats.length) return '<div class="empty">Waiting for phones…</div>';
   return seats.map(s => `<div class="pl${live(s) ? '' : ' off'}" style="--c:${seatColor(s)}"><span class="blob"></span>${esc(nameOf(s))}${showReady ? (ready.has(s) ? ' <span class="ok">✓ ready</span>' : '') : ''}${live(s) ? '' : ' <small>reconnecting…</small>'}</div>`).join('');
+}
+
+function diffHtml() {
+  return `<div class="diffs">${DIFF_KEYS.map(k => `<button class="btn sm${k === diff ? ' on' : ''}" data-diff="${k}">${DIFFS[k].icon} ${DIFFS[k].label}</button>`).join('')}
+    <span class="hint">swipe ← → on a phone to change</span></div>`;
 }
 
 function joinHtml() {
@@ -220,11 +247,12 @@ function renderOverlays() {
       ${joinHtml()}
       <div>
         <h1 class="title">Finger <span>Frolic</span></h1>
-        <div style="color:var(--ink-2);font-size:clamp(16px,2.2vh,22px)">Hold the wall! Monsters march down your lane. Your phone is your sword.</div>
+        <div style="color:var(--ink-2);font-size:clamp(16px,2.2vh,22px)">Hold the wall! Monsters march down your lane. Your phone is your wand.</div>
         <div class="code">${esc(room.room)}</div>
         <div class="url">${esc(url)}</div>
         ${stuckOnLocalhost(url) ? '<div class="warn">This TV page is on localhost, so phones cannot reach that link. Run <b>npm start</b> and open the address it prints.</div>' : ''}
         <div class="players">${playersHtml(true)}</div>
+        ${diffHtml()}
         <div class="prompt">${prompt} ${here.length ? '<button class="btn sm go" data-act="start">Start now</button>' : ''}</div>
       </div>
       ${HOW}
@@ -243,6 +271,7 @@ function renderOverlays() {
         <h1 class="title">The wall fell on <span>wave ${G.wave}</span></h1>
         <table class="rank">${rows}</table>
         <div class="players">${playersHtml(true)}</div>
+        ${diffHtml()}
         <div class="prompt">${prompt} <button class="btn sm go" data-act="start">Play again</button> <button class="btn sm" data-act="lobby">Lobby</button></div>
       </div>
     </div>`;
@@ -254,11 +283,12 @@ function renderOverlays() {
 
 document.addEventListener('click', e => {
   sfx.init(); $('sound').classList.add('hidden');
-  const act = e.target.closest('[data-act]')?.dataset.act;
+  const act = e.target.closest('[data-act]')?.dataset.act, d = e.target.closest('[data-diff]')?.dataset.diff;
+  if (d) setDiff(0, d);
   if (act === 'start') beginCountdown();
   if (act === 'lobby') toLobby();
 });
-function toLobby() { sfx.stopMusic(); G = newGame(); mode = 'lobby'; ready.clear(); dirty = true; renderOverlays(); }
+function toLobby() { sfx.stopMusic(); G = newGame(undefined, diff); mode = 'lobby'; ready.clear(); dirty = true; renderOverlays(); }
 addEventListener('keydown', e => {
   sfx.init(); $('sound').classList.add('hidden');
   if (e.key === 'f' || e.key === 'F') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }
@@ -279,11 +309,14 @@ function snapshot() {
     // what my swipes would hit right now: 0 my own lane, 1 a neighbour's, 2 nothing
     const a = lane >= 0 && G.phase === 'wave' ? aim(G, lane) : null, at = a ? (a.lane === lane ? 0 : 1) : 2;
     const award = over && A[s] ? [A[s].icon, A[s].title, A[s].why] : null;
-    p[s] = q ? [q.score, q.combo, Math.round(q.super * 100), q.stun > 0 ? 1 : 0, q.ev, q.last, lane, ready.has(s) ? 1 : 0, nameOf(s), at, award]
-             : [0, 0, 0, 0, 0, '', -1, ready.has(s) ? 1 : 0, nameOf(s), 2, null];
+    // draw: the next thing this player has to do is draw a shape, so the phone switches to drawing
+    const draw = a && isShapeToken(need(a.e, a.lane)) ? 1 : 0;
+    p[s] = q ? [q.score, q.combo, Math.round(q.super * 100), q.stun > 0 ? 1 : 0, q.ev, q.last, lane, ready.has(s) ? 1 : 0, nameOf(s), at, award, draw]
+             : [0, 0, 0, 0, 0, '', -1, ready.has(s) ? 1 : 0, nameOf(s), 2, null, 0];
   }
   const rank = over ? ranking(G).map(([s]) => s) : null;
   return { t: 's', ph: phase, w: G.wave, h: G.hearts, cd: Math.ceil(mode === 'countdown' ? countdown : G.phase === 'break' ? G.timer : 0), n: present().length, p, rank,
+    diff: DIFFS[diff].icon + ' ' + DIFFS[diff].label,
     fz: Math.round(G.frenzy * 100), fr: Math.ceil(G.frenzyT), ice: Math.ceil(G.freezeT), tev: G.tev, tl: G.tlast };
 }
 function sync(now) {
@@ -297,9 +330,11 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-let last = performance.now();
+let last = performance.now(), lastModes = '';
+const perf = []; // ms of work per frame, for ?debug
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const work0 = performance.now();
   const here = present();
 
   // seats whose phone has been gone a while are freed in the lobby, so the list shows who is really here
@@ -324,20 +359,23 @@ function frame(now) {
   } else if (mode === 'play') {
     const before = G.phase, ev = G.lanes.map(s => G.players[s]?.stun > 0);
     step(G, dt, live);
+    const modes = G.lanes.map((_, i) => { const a = aim(G, i); return a && isShapeToken(need(a.e, a.lane)) ? 1 : 0; }).join('');
+    if (modes !== lastModes) { lastModes = modes; dirty = true; }
     if (G.lanes.some((s, i) => (G.players[s].stun > 0) !== ev[i])) dirty = true;
     if (breakOver(G)) { const next = present(); if (next.length) startWave(G, next); }
     if (G.phase !== before) { dirty = true; renderOverlays(); }
     drainLog();
   }
 
-  tickFx(dt);
-  Lo = drawField(ctx, G, { W: cv.width, H: cv.height, live: s => mode !== 'play' || live(s), name: nameOf });
+  tickFx(dt, G, Lo);
+  Lo = drawField(ctx, G, { W: cv.width, H: cv.height, live: s => mode !== 'play' || live(s), name: nameOf, maxHearts: DIFFS[G.diff]?.hearts });
   if (mode === 'lobby' || G.phase === 'over') drainLog();
   const b = $('banner'); b.style.opacity = now < bannerUntil ? 1 : 0;
   sync(now);
+  perf.push(performance.now() - work0); if (perf.length > 120) perf.shift();
   requestAnimationFrame(frame);
 }
-if (param('debug') != null) window.frolic = { get G() { return G; }, get mode() { return mode; }, need, aim }; // for tests and bots
+if (param('debug') != null) window.frolic = { get G() { return G; }, get mode() { return mode; }, need, aim, perf: () => { const a = [...perf].sort((x, y) => x - y); return { avg: a.reduce((x, y) => x + y, 0) / a.length, p95: a[Math.floor(a.length * 0.95)], max: a.at(-1) }; } }; // for tests and bots
 renderOverlays();
 requestAnimationFrame(frame);
 setInterval(renderOverlays, 1000); // ready ticks and reconnecting labels

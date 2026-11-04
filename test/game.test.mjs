@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, startGame, step, swipe, need, targetOf, aim, planWave, breakOver, startWave, awards, KINDS, OPPOSITE, STUN, START_HEARTS, BOSS_EVERY, KNOCK, FRENZY_HITS, ASSIST_FROM } from '../game.js';
+import { newGame, startGame, step, swipe, need, targetOf, aim, planWave, breakOver, startWave, awards, KINDS, OPPOSITE, START_HEARTS, BOSS_EVERY, ASSIST_FROM, DIFFS, SHAPE_KEYS, planWave as plan, kindFrom } from '../game.js';
+import { SHAPES } from '../shared/shapes.js';
+const { stun: STUN, knock: KNOCK, frenzyHits: FRENZY_HITS } = DIFFS.normal;
 
 const run = (G, secs, live) => { for (let i = 0; i < secs * 30; i++) step(G, 1 / 30, live); };
 const firstOnField = G => { for (let i = 0; i < 3000 && !G.enemies.some(e => e.y > 0); i++) step(G, 1 / 30); return targetOf(G, 0); };
@@ -155,4 +157,35 @@ test('tricksters want the opposite of the arrow shown', () => {
   const e = { kind: 'trickster', lane: 0, hit: 0, arrows: ['u', 'l'], flip: [true, false] };
   assert.equal(need(e, 0), 'd'); e.hit = 1; assert.equal(need(e, 0), 'l');
   assert.ok(KINDS.trickster.from > 1);
+});
+
+test('the TV and the phone agree on the shapes', () => {
+  assert.deepEqual([...SHAPE_KEYS].sort(), Object.keys(SHAPES).sort());
+});
+
+test('golems end in a shape; drawing the right one finishes them, the wrong one stuns', () => {
+  const G = newGame(12); startGame(G, ['p1']); G.wave = 3; startWave(G, ['p1']); G.queue = [];
+  G.enemies = [{ id: 1, kind: 'golem', lane: 0, y: 0.5, speed: 0, hit: 0, arrows: ['u', 'tri'], spin: 0, hurt: 0 }];
+  assert.equal(swipe(G, 'p1', 'u'), 'hit');
+  assert.equal(need(G.enemies[0], 0), 'tri');
+  assert.equal(swipe(G, 'p1', 'u'), 'miss', 'a swipe is not a triangle');
+  G.players.p1.stun = 0;
+  assert.equal(swipe(G, 'p1', 'circle'), 'miss');
+  G.players.p1.stun = 0;
+  assert.equal(swipe(G, 'p1', 'tri'), 'kill');
+  // real golems from makeEnemy
+  for (let i = 0; i < 300 && !G.enemies.some(e => e.kind === 'golem'); i++) { G.queue = [{ at: 0, kind: 'golem', lane: 0 }]; G.enemies = []; step(G, 0.01); }
+  const g = G.enemies.find(e => e.kind === 'golem');
+  assert.ok(SHAPE_KEYS.includes(g.arrows.at(-1)));
+  assert.ok(g.arrows.slice(0, -1).every(a => ['u', 'd', 'l', 'r'].includes(a)));
+});
+
+test('harder difficulties: fewer hearts, faster and bigger waves, new monsters sooner', () => {
+  const r = () => 0.5;
+  const sizes = Object.keys(DIFFS).map(d => plan(6, 3, r, DIFFS[d]).length);
+  assert.ok(sizes.every((n, i) => !i || n > sizes[i - 1]), String(sizes));
+  assert.ok(kindFrom('trickster', DIFFS.nightmare) < kindFrom('trickster', DIFFS.normal));
+  const hearts = d => { const G = newGame(1, d); startGame(G, ['p1']); return G.hearts; };
+  assert.ok(hearts('easy') > hearts('normal') && hearts('normal') > hearts('hard') && hearts('hard') > hearts('nightmare'));
+  const G = newGame(1, 'hard'); startGame(G, ['p1']); assert.equal(G.diff, 'hard', 'restarts keep the difficulty');
 });
