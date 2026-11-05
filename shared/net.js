@@ -99,8 +99,11 @@ const backoff = n => Math.min(8000, 500 * 2 ** n);
 export function hostRoom({ game, seats, onSeats, onAction, onStatus = () => {} }) {
   keepAwake();
   const net = param('net') === 'local' ? 'local' : 'ws';
-  const room = (param('room') || load(`frolic-room-${game}`) || randCode()).toUpperCase();
-  save(`frolic-room-${game}`, room);
+  // The real board remembers its code so phones can rejoin after a reload. A local (dev mode) room is never
+  // remembered, so opening dev mode doesn't leave the real board stuck on its code.
+  const saved = load(`frolic-room-${game}`), DEV = 'DEVXX';
+  const room = (param('room') || (saved !== DEV && saved) || randCode()).toUpperCase();
+  if (net !== 'local') save(`frolic-room-${game}`, room);
   const seatKey = `frolic-seats-${game}-${room}`;
   // seat -> {cid, name}; who is connected right now is kept apart, since it is not part of the save
   const sat = Object.fromEntries(seats.map(s => [s, (load(seatKey) || {})[s] || null]));
