@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node tools/serve.mjs --relay",
+    "start": "node tools/serve.mjs --lan --relay",
     "serve": "node tools/serve.mjs",
     "relay": "npm --prefix server run dev",
     "test": "node --test test/*.test.mjs server/test/room.test.mjs"
